@@ -9,4 +9,6 @@
         <item>com.netflix.ninja</item>
         <item>com.google.android.youtube.tv</item>
     </string-array>
+    <!-- Render app icons and banners in greyscale. -->
+    <bool name="icons_greyscale">true</bool>
 </resources>

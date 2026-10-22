@@ -329,7 +329,7 @@ public class MainActivity extends Activity {
         Drawable banner = info.loadBanner(pm);
         if (banner != null) {
             ImageView image = tile.findViewById(R.id.image);
-            image.setImageDrawable(banner);
+            image.setImageDrawable(Apps.mono(this, banner));
             // The hairline keeps a white banner visible on a pale photo (the mockup's inset 1px at 8%).
             GradientDrawable hair = new GradientDrawable();
             hair.setCornerRadius(9 * density);
@@ -430,7 +430,7 @@ public class MainActivity extends Activity {
         trackPosition(image, frost);
         image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         image.setPadding(dp(70), dp(18), dp(70), dp(40));
-        image.setImageDrawable(icon);
+        image.setImageDrawable(Apps.mono(this, icon));
         image.setImageTintList(ColorStateList.valueOf(dockPair.ink));
         TextView text = tile.findViewById(R.id.label);
         text.setText(label);

@@ -69,4 +69,14 @@ final class Apps {
         Collections.sort(entries, (a, b) -> a.label.compareToIgnoreCase(b.label));
         return entries;
     }
+
+    /** Returns the drawable rendered in greyscale when R.bool.icons_greyscale is set. */
+    static android.graphics.drawable.Drawable mono(android.content.Context c, android.graphics.drawable.Drawable d) {
+        if (d == null || !c.getResources().getBoolean(R.bool.icons_greyscale)) return d;
+        d = d.mutate();
+        android.graphics.ColorMatrix m = new android.graphics.ColorMatrix();
+        m.setSaturation(0);
+        d.setColorFilter(new android.graphics.ColorMatrixColorFilter(m));
+        return d;
+    }
 }

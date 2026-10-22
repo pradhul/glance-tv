@@ -92,7 +92,7 @@ public class AllAppsActivity extends Activity {
                     ? convertView
                     : getLayoutInflater().inflate(R.layout.item_app, parent, false);
             Apps.Entry entry = entries.get(position);
-            ((ImageView) cell.findViewById(R.id.icon)).setImageDrawable(entry.icon);
+            ((ImageView) cell.findViewById(R.id.icon)).setImageDrawable(Apps.mono(AllAppsActivity.this, entry.icon));
             ((TextView) cell.findViewById(R.id.label)).setText(entry.label);
             return cell;
         }
