@@ -36,6 +36,8 @@ for item in json.load(open(sys.argv[1])):
     name = f"{n:02d}"
     im = cover(Image.open(item["path"]).convert("RGB"))
     blur = im.filter(ImageFilter.GaussianBlur(40))
+    # The background shows a lightly softened copy (v13); the sharp crop stays as the source of truth.
+    im.filter(ImageFilter.GaussianBlur(6)).save(os.path.join(ASSETS, f"{name}-soft.jpg"), quality=80, optimize=True)
     im.save(os.path.join(ASSETS, f"{name}.jpg"), quality=82, optimize=True)
     blur.resize((W // 2, H // 2), Image.LANCZOS).save(os.path.join(ASSETS, f"{name}-blur.jpg"), quality=80, optimize=True)
     gray = blur.convert("L")

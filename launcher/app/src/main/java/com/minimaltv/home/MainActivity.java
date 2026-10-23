@@ -296,6 +296,14 @@ public class MainActivity extends Activity {
         }
         dockDark = dockDark || night;
 
+        // On a darker photo the top text is pure white with a soft shadow; night keeps amber (with the shadow).
+        if (topDark && !night) top.ink = 0xFFFFFFFF;
+        if (dockDark && !night) dockPair.ink = 0xFFFFFFFF;
+        float sr = (topDark || night) ? 6 * density : 0;
+        for (TextView t : new TextView[]{greeting, findViewById(R.id.clock), findViewById(R.id.date), weatherView}) {
+            t.setShadowLayer(sr, 0, sr > 0 ? density : 0, 0x66000000);
+        }
+        appName.setShadowLayer((dockDark || night) ? 6 * density : 0, 0, density, 0x66000000);
         int ink = top.ink;
         greeting.setTextColor(ink);
         ((TextView) findViewById(R.id.clock)).setTextColor(ink);

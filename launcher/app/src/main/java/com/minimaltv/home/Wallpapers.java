@@ -50,6 +50,8 @@ final class Wallpapers {
 
     private static final String TAG = "Wallpapers";
     private static final String DIR = "wallpapers";
+    /** Mean region luminance below which the top text and pills switch to white. */
+    private static final double LIGHT_TEXT_BELOW = 0.70;
 
     private Wallpapers() {
     }
@@ -71,7 +73,9 @@ final class Wallpapers {
         Theme theme = set.get(new Random().nextInt(set.size()));
         if (forced != null) for (Theme t : all) if (t.file.equals(forced)) theme = t;
         lastFile = theme.file;
-        Bitmap sharp = decode(assets, theme.file);
+        // The background is the lightly blurred "-soft" copy (pre-made: no per-frame cost on the TV).
+        Bitmap sharp = decode(assets, theme.file.replace(".jpg", "-soft.jpg"));
+        if (sharp == null) sharp = decode(assets, theme.file);
         if (sharp == null) return null;
         Bitmap blurred = decode(assets, theme.file.replace(".jpg", "-blur.jpg"));
         return new Loaded(theme, sharp, blurred);
@@ -85,9 +89,11 @@ final class Wallpapers {
             Theme[] themes = new Theme[array.length()];
             for (int i = 0; i < array.length(); i++) {
                 JSONObject o = array.getJSONObject(i);
-                themes[i] = new Theme(o.getString("file"),
-                        "dark".equals(o.optString("top")),
-                        "dark".equals(o.optString("pills")),
+                // Light text unless the region is really bright: mid-tones (sunsets) read better in white.
+                JSONObject l = o.optJSONObject("luminance");
+                boolean topDark = "dark".equals(o.optString("top")) || (l != null && l.optDouble("top", 1) < LIGHT_TEXT_BELOW);
+                boolean pillsDark = "dark".equals(o.optString("pills")) || (l != null && l.optDouble("pills", 1) < LIGHT_TEXT_BELOW);
+                themes[i] = new Theme(o.getString("file"), topDark, pillsDark,
                         "dark".equals(o.optString("dock")));
                 themes[i].night = "night".equals(o.optString("set"));
                 JSONObject lum = o.optJSONObject("luminance");
