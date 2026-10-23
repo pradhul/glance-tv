@@ -177,23 +177,23 @@ public class MainActivity extends Activity {
         @Override
         public void onInputStateChanged(String inputId, int state) {
             maybeAutoJump(inputId);
-            rebuildKeepingFocus();
+            rebuildIfChanged();
         }
 
         @Override
         public void onInputAdded(String inputId) {
             maybeAutoJump(inputId);
-            rebuildKeepingFocus();
+            rebuildIfChanged();
         }
 
         @Override
         public void onInputRemoved(String inputId) {
-            rebuildKeepingFocus();
+            rebuildIfChanged();
         }
 
         @Override
         public void onInputUpdated(String inputId) {
-            rebuildKeepingFocus();
+            rebuildIfChanged();
         }
     };
 
@@ -452,7 +452,26 @@ public class MainActivity extends Activity {
     }
 
     /** Rebuilds the dock and puts focus back on the tile at the same place, if the focus was in the dock. */
+    private String dockSignature;
+
+    /** What the dock would show: pinned apps + connected HDMI tiles. Rebuild only when this changes. */
+    private String currentSignature() {
+        StringBuilder b = new StringBuilder(TextUtils.join(",", pinned()));
+        try {
+            for (HdmiDevice d : connectedHdmi()) b.append('|').append(d.inputId).append('=').append(d.name);
+        } catch (RuntimeException ignored) {
+        }
+        return b.toString();
+    }
+
+    private void rebuildIfChanged() {
+        String sig = currentSignature();
+        if (sig.equals(dockSignature)) return;
+        rebuildKeepingFocus();
+    }
+
     private void rebuildKeepingFocus() {
+        dockSignature = currentSignature();
         View focused = getCurrentFocus();
         int index = focused != null && focused.getParent() == dock ? dock.indexOfChild(focused) : -1;
         buildDock();
@@ -1137,7 +1156,7 @@ public class MainActivity extends Activity {
         }
         String title = prefs().getString(MediaListener.KEY_TITLE, null);
         String pkg = prefs().getString(MediaListener.KEY_PKG, null);
-        if (hdmiShown || title == null || pkg == null) {
+        if (hdmiShown || pkg == null) {
             if (lastWatched.hasFocus()) findViewById(R.id.btnSettings).requestFocus();
             lastWatched.setVisibility(View.GONE);
             return;
@@ -1158,7 +1177,7 @@ public class MainActivity extends Activity {
         icon.setBounds(0, 0, size, size);
         lastWatched.setCompoundDrawableTintList(null);   // keep the greyscaled icon, not a flat ink shape
         lastWatched.setCompoundDrawables(icon, null, null, null);
-        lastWatched.setText(title + " \u00B7 " + label);
+        lastWatched.setText(title != null ? title + " \u00B7 " + label : "Resume \u00B7 " + label);
         lastWatched.setVisibility(View.VISIBLE);
     }
 

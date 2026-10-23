@@ -10,6 +10,7 @@ import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
 import android.service.notification.NotificationListenerService;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.List;
  */
 public class MediaListener extends NotificationListenerService {
 
+    static final String TAG = "MTL";
     static final String PREFS = "dock";
     static final String KEY_TITLE = "last_title";
     static final String KEY_PKG = "last_pkg";
@@ -40,10 +42,14 @@ public class MediaListener extends NotificationListenerService {
         }
     };
 
-    private final MediaSessionManager.OnActiveSessionsChangedListener sessionsListener = controllers -> follow(controllers);
+    private final MediaSessionManager.OnActiveSessionsChangedListener sessionsListener = controllers -> {
+        Log.d(TAG, "active sessions changed: " + (controllers == null ? 0 : controllers.size()));
+        follow(controllers);
+    };
 
     @Override
     public void onListenerConnected() {
+        Log.d(TAG, "listener connected");
         try {
             msm = getSystemService(MediaSessionManager.class);
             ComponentName me = new ComponentName(this, MediaListener.class);
@@ -91,28 +97,70 @@ public class MediaListener extends NotificationListenerService {
         record(this, watched);
     }
 
-    /** Saves the best session's title: a playing one first, else the first with a title. */
+    /** Sessions worth remembering: not ours, not Bluetooth or another system package. */
+    static boolean eligible(Context context, String pkg) {
+        if (pkg == null || pkg.equals(context.getPackageName()) || pkg.equals("android")
+                || pkg.startsWith("com.android.") || pkg.startsWith("com.google.android.tv.remote")) return false;
+        try {
+            android.content.pm.ApplicationInfo ai = context.getPackageManager().getApplicationInfo(pkg, 0);
+            boolean system = (ai.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                    && (ai.flags & android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0;
+            // Preinstalled-but-updated apps (Netflix, YouTube on many TVs) count; only launchable apps count.
+            boolean launchable = Apps.launchIntent(context.getPackageManager(), pkg) != null;
+            return launchable && (!system || ai.packageName.contains("netflix") || ai.packageName.contains("youtube"));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean active(PlaybackState st) {
+        if (st == null) return false;
+        int s = st.getState();
+        return s == PlaybackState.STATE_PLAYING || s == PlaybackState.STATE_PAUSED || s == PlaybackState.STATE_BUFFERING
+                || s == PlaybackState.STATE_CONNECTING || s == PlaybackState.STATE_FAST_FORWARDING
+                || s == PlaybackState.STATE_REWINDING;
+    }
+
+    /**
+     * Saves one session: a playing/paused/buffering one first, else the eligible session with the newest
+     * PlaybackState update (getActiveSessions also lists inactive ones, e.g. Netflix's STOPPED session with
+     * null metadata). The title is optional; with none, the pill shows "Resume · App".
+     */
     static void record(Context context, List<MediaController> controllers) {
         if (controllers == null) return;
-        String title = null, pkg = null;
+        MediaController best = null;
+        boolean bestActive = false;
+        long bestTime = Long.MIN_VALUE;
         for (MediaController c : controllers) {
             try {
-                String t = title(c.getMetadata());
-                if (t == null || context.getPackageName().equals(c.getPackageName())) continue;
+                String pkg = c.getPackageName();
                 PlaybackState st = c.getPlaybackState();
-                boolean playing = st != null && st.getState() == PlaybackState.STATE_PLAYING;
-                if (title == null || playing) {
-                    title = t;
-                    pkg = c.getPackageName();
-                    if (playing) break;
+                Log.d(TAG, "session " + pkg + " state=" + (st == null ? "null" : st.getState())
+                        + " title=" + title(c.getMetadata()));
+                if (!eligible(context, pkg)) continue;
+                boolean act = active(st);
+                long t = st == null ? 0 : st.getLastPositionUpdateTime();
+                if (best == null || (act && !bestActive) || (act == bestActive && t > bestTime)) {
+                    best = c;
+                    bestActive = act;
+                    bestTime = t;
                 }
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException e) {
+                Log.d(TAG, "session read failed", e);
             }
         }
-        if (title == null) return;
+        if (best == null) return;
+        String pkg = best.getPackageName();
+        String title = title(best.getMetadata());
         SharedPreferences p = context.getSharedPreferences(PREFS, MODE_PRIVATE);
-        if (title.equals(p.getString(KEY_TITLE, null)) && pkg.equals(p.getString(KEY_PKG, null))) return;
-        p.edit().putString(KEY_TITLE, title).putString(KEY_PKG, pkg).apply();
+        String oldPkg = p.getString(KEY_PKG, null), oldTitle = p.getString(KEY_TITLE, null);
+        // Same app, no title now: keep the title it published earlier.
+        if (title == null && pkg.equals(oldPkg)) title = oldTitle;
+        if (pkg.equals(oldPkg) && (title == null ? oldTitle == null : title.equals(oldTitle))) return;
+        SharedPreferences.Editor e = p.edit().putString(KEY_PKG, pkg);
+        if (title == null) e.remove(KEY_TITLE); else e.putString(KEY_TITLE, title);
+        boolean ok = e.commit();
+        Log.d(TAG, "recorded " + pkg + " title=" + title + " active=" + bestActive + " ok=" + ok);
     }
 
     private static String title(MediaMetadata m) {
