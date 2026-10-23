@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
         weatherView.setTextColor(ink);
         if (slimLine != null) {
             float ss = (topDark || night) ? 6 * density : 0;
-            for (TextView t : new TextView[]{slimClock, slimWeather}) {
+            for (TextView t : new TextView[]{slimClock, slimDate, slimWeather}) {
                 t.setTextColor(ink);
                 t.setShadowLayer(ss, 0, ss > 0 ? density : 0, 0x66000000);
             }
@@ -1238,7 +1238,7 @@ public class MainActivity extends Activity {
         Drawable icon = getDrawable(weather.icon());
         weatherView.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(top != null ? top.ink : Color.WHITE));
-        weatherView.setVisibility(cardStyle() == STYLE_FLOATING ? View.GONE : View.VISIBLE);
+        weatherView.setVisibility(cardStyle() == STYLE_GLASS ? View.VISIBLE : View.GONE);
     }
 
     // ---- v5: last watched ------------------------------------------------------------------------
@@ -1350,6 +1350,8 @@ public class MainActivity extends Activity {
     private TextView netLine, morePill;
     private FrameLayout.LayoutParams lockDefault, dockDefault;
     private int lockGravityDefault;
+    private FrameLayout.LayoutParams rowDefault;
+    private int rowFrameTop;
     private PopupWindow morePopup;
 
     /** Creates the views layout C adds (Wi-Fi line under the weather, the ⋯ pill) and remembers the defaults. */
@@ -1384,9 +1386,34 @@ public class MainActivity extends Activity {
     private void applyLayout() {
         if (lockDefault == null) return;
         boolean c = cardStyle() == STYLE_GLASS;
+        boolean pa = cardStyle() == STYLE_POSTERS;   // v22: poster layout A
         LinearLayout lock = findViewById(R.id.lock);
         View block = findViewById(R.id.dockBlock);
-        if (c) {
+        View row = (View) lastWatched.getParent();
+        View rowFrame = (View) row.getParent();
+        if (rowDefault == null) {
+            rowDefault = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) row.getLayoutParams());
+            rowFrameTop = ((ViewGroup.MarginLayoutParams) rowFrame.getLayoutParams()).topMargin;
+        }
+        FrameLayout.LayoutParams rl = new FrameLayout.LayoutParams(rowDefault);
+        if (pa) rl.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        row.setLayoutParams(rl);
+        // Posters end 150 + 240 = 390dp down; the pills sit 45dp above the bottom (540dp screen): 77dp gap.
+        ((ViewGroup.MarginLayoutParams) rowFrame.getLayoutParams()).topMargin = pa ? dp(77) : rowFrameTop;
+        rowFrame.requestLayout();
+        if (pa) {
+            FrameLayout.LayoutParams l = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
+            l.setMarginEnd(dp(55));
+            l.topMargin = dp(40);
+            lock.setLayoutParams(l);
+            lock.setGravity(Gravity.END);
+            FrameLayout.LayoutParams d = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
+            d.setMarginStart(dp(55));
+            d.topMargin = dp(150);
+            block.setLayoutParams(d);
+        } else if (c) {
             FrameLayout.LayoutParams l = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.CENTER_VERTICAL);
             l.setMarginStart(dp(60));
@@ -1402,14 +1429,14 @@ public class MainActivity extends Activity {
             lock.setGravity(lockGravityDefault);
             block.setLayoutParams(new FrameLayout.LayoutParams(dockDefault));
         }
-        int classic = c ? View.GONE : View.VISIBLE;
+        int classic = c || pa ? View.GONE : View.VISIBLE;
         findViewById(R.id.pills).setVisibility(classic);
         findViewById(R.id.btnAllApps).setVisibility(classic);
         findViewById(R.id.btnAdd).setVisibility(classic);
         netStatus.setVisibility(classic);
-        appName.setVisibility(c ? View.GONE : View.VISIBLE);
+        appName.setVisibility(c || pa ? View.GONE : View.VISIBLE);
         netLine.setVisibility(c ? View.VISIBLE : View.GONE);
-        morePill.setVisibility(c ? View.VISIBLE : View.GONE);
+        morePill.setVisibility(c || pa ? View.VISIBLE : View.GONE);
         LinearLayout.LayoutParams al = (LinearLayout.LayoutParams) analog.getLayoutParams();
         al.width = al.height = dp(c ? 210 : 164);
         analog.requestLayout();
@@ -1505,7 +1532,20 @@ public class MainActivity extends Activity {
         applyLayout();
         boolean glass = cardStyle() == STYLE_GLASS;
         analog.setVisibility(glass ? View.VISIBLE : View.GONE);
-        boolean slim = cardStyle() == STYLE_FLOATING;
+        boolean posters = cardStyle() == STYLE_POSTERS;
+        boolean slim = cardStyle() == STYLE_FLOATING || posters;
+        if (slimClock != null) {
+            // Floating: one line "h:mm | Fri 23 Oct · ☂ 21°". Posters (layout A): bigger time, then date + weather.
+            ((android.widget.TextClock) slimClock).setFormat12Hour(posters ? "h:mm" : "h:mm  '|'  EEE d MMM");
+            ((android.widget.TextClock) slimClock).setFormat24Hour(posters ? "HH:mm" : "HH:mm  '|'  EEE d MMM");
+            slimClock.setTextSize(posters ? 32 : 22);
+            slimDate.setVisibility(posters ? View.VISIBLE : View.GONE);
+            slimLine.setGravity(posters ? Gravity.TOP : Gravity.CENTER_VERTICAL);   // TOP keeps baselines aligned
+            slimDate.setTextSize(17);
+            slimWeather.setTextSize(posters ? 17 : 22);
+            slimDate.setAlpha(0.85f);
+            slimWeather.setAlpha(posters ? 0.85f : 1f);
+        }
         findViewById(R.id.clock).setVisibility(glass || slim ? View.GONE : View.VISIBLE);
         // v21: Floating icons swap the clock block for one slim line.
         greeting.setVisibility(slim ? View.GONE : View.VISIBLE);
@@ -1523,7 +1563,7 @@ public class MainActivity extends Activity {
     private static final String KEY_AUTO_STYLE = "auto_style";
     private static final String KEY_AUTO_OFFSET = "auto_style_offset";
     private LinearLayout slimLine;
-    private TextView slimClock, slimWeather;
+    private TextView slimClock, slimDate, slimWeather;
     private RainView rain;
     private boolean forceRain;
     private int lastPosterIndex = -1;
@@ -1537,14 +1577,18 @@ public class MainActivity extends Activity {
         clock.setFormat12Hour("h:mm  '|'  EEE d MMM");
         clock.setFormat24Hour("HH:mm  '|'  EEE d MMM");
         slimClock = clock;
+        android.widget.TextClock date = new android.widget.TextClock(this);
+        date.setFormat12Hour("'   'EEE d MMM");
+        date.setFormat24Hour("'   'EEE d MMM");
+        slimDate = date;
         slimWeather = new TextView(this);
-        for (TextView t : new TextView[]{slimClock, slimWeather}) {
+        for (TextView t : new TextView[]{slimClock, slimDate, slimWeather}) {
             t.setTextSize(22);
             t.setSingleLine(true);
             t.setIncludeFontPadding(false);
             t.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
             t.setTextColor(top != null ? top.ink : Color.WHITE);
-            slimLine.addView(t);
+            slimLine.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         slimLine.setVisibility(View.GONE);
         lock.addView(slimLine, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1750,7 +1794,7 @@ public class MainActivity extends Activity {
     }
 
     private View posterTile(String label, String subtitle, Drawable icon, boolean glyph) {
-        final int narrow = dp(90), wide = dp(300), height = dp(210);
+        final int narrow = dp(80), wide = dp(280), height = dp(240);   // v22: layout A sizes
         FrameLayout tile = new FrameLayout(this);
         tile.setFocusable(true);
         tile.setClickable(true);
@@ -1801,7 +1845,7 @@ public class MainActivity extends Activity {
         vertical.setPivotX(0);
         vertical.setPivotY(0);
         vertical.setRotation(-90);
-        vertical.setTranslationX(dp(32));
+        vertical.setTranslationX(narrow / 2f - dp(13));
         vertical.setTranslationY(dp(-14) + dp(24));
 
         // Wide: name + subtitle bottom-left, icon top-right.
