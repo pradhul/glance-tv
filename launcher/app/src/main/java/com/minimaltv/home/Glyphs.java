@@ -53,7 +53,7 @@ final class Glyphs {
         brand(0xFFE50914, "com.netflix.ninja", "com.netflix.mediaclient");
         brand(0xFFFF0000, "com.google.android.youtube.tv", "com.google.android.youtube", "org.smarttube.stable", "org.smarttube.beta");
         brand(0xFF00A8E1, "com.amazon.amazonvideo.livingroom");
-        brand(0xFFFFFFFF, "com.apple.atve.androidtv.appletv");
+        brand(0xFF000000, "com.apple.atve.androidtv.appletv");   // black: adapted to the wallpaper at use
         brand(0xFFF47521, "com.crunchyroll.crunchyroid");
         brand(0xFF1DB954, "com.spotify.tv.android", "com.spotify.music");
         brand(0xFFEBAF00, "com.plexapp.android");

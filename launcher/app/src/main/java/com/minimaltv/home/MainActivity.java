@@ -273,6 +273,7 @@ public class MainActivity extends Activity {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 blurred = loaded.blurred;
                 wallpaperLum = loaded.theme.luminance;
+                rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
                 wallpaperView.setImageBitmap(loaded.sharp);
                 applyTheme(loaded.theme.topDark, loaded.theme.pillsDark, loaded.theme.dockDark);
                 buildDock();
@@ -1303,6 +1304,38 @@ public class MainActivity extends Activity {
 
     private AnalogClockView analog;
 
+    /** Luminance (0-1) of the wallpaper behind the icon row; recomputed whenever the wallpaper changes. */
+    private float rowLum = 0.5f;
+    /** Background darker than this counts as dark (white glyph), otherwise light (black glyph). */
+    private static final float ROW_DARK_BELOW = 0.5f;
+    /** A brand colour closer than this in luminance to the background is swapped for black/white. */
+    private static final float MIN_BRAND_CONTRAST = 0.3f;
+
+    /** Average luminance of the bitmap's lower-middle region (x 20-80%, y 55-95%), sampled on a grid. */
+    private static float rowLuminance(Bitmap b) {
+        if (b == null) return 0.5f;
+        int w = b.getWidth(), h = b.getHeight();
+        double sum = 0;
+        int n = 0;
+        for (int y = (int) (h * 0.55f); y < h * 0.95f; y += Math.max(1, h / 60)) {
+            for (int x = (int) (w * 0.2f); x < w * 0.8f; x += Math.max(1, w / 80)) {
+                sum += lum(b.getPixel(x, y));
+                n++;
+            }
+        }
+        return n == 0 ? 0.5f : (float) (sum / n);
+    }
+
+    private static float lum(int c) {
+        return (0.2126f * Color.red(c) + 0.7152f * Color.green(c) + 0.0722f * Color.blue(c)) / 255f;
+    }
+
+    /** The brand colour, unless it is too close to the background's brightness: then white on dark, black on light. */
+    private int focusColour(int brand) {
+        if (Math.abs(lum(brand) - rowLum) >= MIN_BRAND_CONTRAST) return brand;
+        return rowLum < ROW_DARK_BELOW ? 0xFFFFFFFF : 0xFF000000;
+    }
+
     /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
     private void updateClockStyle() {
         if (analog == null) return;
@@ -1379,7 +1412,7 @@ public class MainActivity extends Activity {
                 Object old = image.getTag();
                 if (old instanceof android.animation.Animator) ((android.animation.Animator) old).cancel();
                 int from = image.getTag(R.id.label) instanceof Integer ? (Integer) image.getTag(R.id.label) : dockPair.ink;
-                int to = focused ? brand : dockPair.ink;
+                int to = focused ? focusColour(brand) : dockPair.ink;
                 android.animation.ValueAnimator ta = android.animation.ValueAnimator.ofArgb(from, to);
                 ta.setDuration(150);
                 ta.addUpdateListener(an -> {
