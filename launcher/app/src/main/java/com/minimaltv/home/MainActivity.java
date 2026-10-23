@@ -241,6 +241,11 @@ public class MainActivity extends Activity {
         takeWallpaperExtra(getIntent());
         loadWallpaper();
 
+        analog = new AnalogClockView(this);
+        LinearLayout lock = findViewById(R.id.lock);
+        lock.addView(analog, 0, new LinearLayout.LayoutParams(dp(164), dp(164)));
+        updateClockStyle();
+
         // Bottom vignette behind the dock (transparent -> ~35% black) so tiles stand out on bright photos.
         View vignette = new View(this);
         vignette.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
@@ -310,6 +315,7 @@ public class MainActivity extends Activity {
         }
         appName.setShadowLayer((dockDark || night) ? 6 * density : 0, 0, density, 0x66000000);
         int ink = top.ink;
+        if (analog != null) analog.setColor(ink, topDark || night);
         greeting.setTextColor(ink);
         ((TextView) findViewById(R.id.clock)).setTextColor(ink);
         ((TextView) findViewById(R.id.date)).setTextColor(ink);
@@ -528,8 +534,8 @@ public class MainActivity extends Activity {
             String sub = pkg.equals(prefs().getString(MediaListener.KEY_PKG, null))
                     ? prefs().getString(MediaListener.KEY_TITLE, null) : null;
             View t = simpleIcons()
-                    ? styledTile(style, label, sub, Glyphs.forApp(this, pkg, label), null, true)
-                    : styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false);
+                    ? styledTile(style, label, sub, Glyphs.forApp(this, pkg, label), null, true, Glyphs.brandColor(pkg))
+                    : styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false, 0);
             t.setOnClickListener(v -> Apps.start(this, launch));
             t.setOnLongClickListener(v -> {
                 confirmRemove(pkg, label);
@@ -830,7 +836,7 @@ public class MainActivity extends Activity {
         int style = cardStyle();
         if (style != STYLE_GLASS) {
             int res = console ? R.drawable.ic_game_console : R.drawable.ic_hdmi;
-            View t = styledTile(style, device.name, null, getDrawable(res), null, true);
+            View t = styledTile(style, device.name, null, getDrawable(res), null, true, 0xFFFFFFFF);
             t.setOnClickListener(v -> switchTo(device.inputId));
             dock.addView(t);
             return;
@@ -1162,6 +1168,7 @@ public class MainActivity extends Activity {
                 .setSingleChoiceItems(names, cardStyle(), (d, which) -> {
                     prefs().edit().putInt(KEY_CARD_STYLE, which).apply();
                     d.dismiss();
+                    updateClockStyle();
                     buildDock();
                     focusFirstTile();
                 })
@@ -1294,6 +1301,18 @@ public class MainActivity extends Activity {
     static final int STYLE_GLASS = 0, STYLE_FLOATING = 1, STYLE_POSTERS = 2;
     private static final String KEY_CARD_STYLE = "card_style";
 
+    private AnalogClockView analog;
+
+    /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
+    private void updateClockStyle() {
+        if (analog == null) return;
+        boolean glass = cardStyle() == STYLE_GLASS;
+        analog.setVisibility(glass ? View.VISIBLE : View.GONE);
+        findViewById(R.id.clock).setVisibility(glass ? View.GONE : View.VISIBLE);
+        ((LinearLayout.LayoutParams) greeting.getLayoutParams()).topMargin = glass ? dp(10) : 0;
+        greeting.requestLayout();
+    }
+
     private int cardStyle() {
         return prefs().getInt(KEY_CARD_STYLE, STYLE_GLASS);
     }
@@ -1308,11 +1327,11 @@ public class MainActivity extends Activity {
      * A dock item for the floating and poster styles. icon: the greyscale (or ink-tinted, for HDMI glyphs)
      * picture; colour: a separate copy shown in full colour on focus (floating only), null for none.
      */
-    private View styledTile(int style, String label, String subtitle, Drawable icon, Drawable colour, boolean glyph) {
-        return style == STYLE_FLOATING ? floatingTile(label, icon, colour, glyph) : posterTile(label, subtitle, icon, glyph);
+    private View styledTile(int style, String label, String subtitle, Drawable icon, Drawable colour, boolean glyph, int brand) {
+        return style == STYLE_FLOATING ? floatingTile(label, icon, colour, glyph, brand) : posterTile(label, subtitle, icon, glyph);
     }
 
-    private View floatingTile(String label, Drawable icon, Drawable colour, boolean glyph) {
+    private View floatingTile(String label, Drawable icon, Drawable colour, boolean glyph, int brand) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -1355,6 +1374,22 @@ public class MainActivity extends Activity {
         tile.setOnFocusChangeListener((v, focused) -> {
             // Full colour while focused (only the icon swaps; no relayout), grey again after.
             if (colour != null) image.setImageDrawable(focused ? colour : shown);
+            if (glyph && brand != 0) {
+                // Brand colour on focus, the dock ink otherwise; cross-fade the tint over 150 ms.
+                Object old = image.getTag();
+                if (old instanceof android.animation.Animator) ((android.animation.Animator) old).cancel();
+                int from = image.getTag(R.id.label) instanceof Integer ? (Integer) image.getTag(R.id.label) : dockPair.ink;
+                int to = focused ? brand : dockPair.ink;
+                android.animation.ValueAnimator ta = android.animation.ValueAnimator.ofArgb(from, to);
+                ta.setDuration(150);
+                ta.addUpdateListener(an -> {
+                    int cval = (int) an.getAnimatedValue();
+                    shown.setTint(cval);
+                    image.setTag(R.id.label, cval);
+                });
+                image.setTag(ta);
+                ta.start();
+            }
             image.animate().scaleX(focused ? 1.55f : 1f).scaleY(focused ? 1.55f : 1f).alpha(focused ? 1f : 0.82f)
                     .translationY(focused ? -dp(8) : 0).setDuration(150).start();
             name.animate().alpha(focused ? 1f : 0f).setDuration(150).start();
@@ -1392,8 +1427,12 @@ public class MainActivity extends Activity {
         else shown = Apps.mono(this, shown);
         image.setImageDrawable(shown);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(dp(64), dp(40), Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        // Pinned to the left (not centred) so widening the card does not drag it; everything clips to the card.
+        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(dp(64), dp(40), Gravity.START | Gravity.TOP);
+        ip.leftMargin = (narrow - dp(64)) / 2;
         ip.topMargin = dp(24);
+        tile.setClipToOutline(true);
+        tile.setClipChildren(true);
         tile.addView(image, ip);
 
         // Narrow: the name runs bottom-to-top along the card.
@@ -1456,8 +1495,11 @@ public class MainActivity extends Activity {
             vertical.animate().alpha(focused ? 0f : 0.85f).setDuration(120).start();
             text.animate().alpha(focused ? 1f : 0f).setStartDelay(focused ? 80 : 0).setDuration(140).start();
             // Icon slides to the top-right of the wide card.
-            image.animate().translationX(focused ? (wide - narrow) / 2f + dp(20) : 0).translationY(focused ? -dp(4) : 0)
-                    .scaleX(focused ? 1.3f : 1f).scaleY(focused ? 1.3f : 1f).setDuration(170).start();
+            // Ends inside the wide card's top-right corner (16dp in), scaled a little; never past the edge.
+            float s15 = 1.15f;
+            float right = wide - dp(16) - dp(64) * (1 + s15) / 2f - (narrow - dp(64)) / 2f;
+            image.animate().translationX(focused ? right : 0).translationY(focused ? dp(3) : 0)
+                    .scaleX(focused ? s15 : 1f).scaleY(focused ? s15 : 1f).setDuration(170).start();
         });
         return tile;
     }

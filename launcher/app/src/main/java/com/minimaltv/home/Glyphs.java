@@ -47,6 +47,37 @@ final class Glyphs {
         BY_PACKAGE.put("com.android.settings", R.drawable.ic_app_settings);
     }
 
+    private static final Map<String, Integer> BRAND = new HashMap<>();
+
+    static {
+        brand(0xFFE50914, "com.netflix.ninja", "com.netflix.mediaclient");
+        brand(0xFFFF0000, "com.google.android.youtube.tv", "com.google.android.youtube", "org.smarttube.stable", "org.smarttube.beta");
+        brand(0xFF00A8E1, "com.amazon.amazonvideo.livingroom");
+        brand(0xFFFFFFFF, "com.apple.atve.androidtv.appletv");
+        brand(0xFFF47521, "com.crunchyroll.crunchyroid");
+        brand(0xFF1DB954, "com.spotify.tv.android", "com.spotify.music");
+        brand(0xFFEBAF00, "com.plexapp.android");
+        brand(0xFFFF8800, "org.videolan.vlc");
+        brand(0xFF17B2E7, "org.xbmc.kodi");
+        brand(0xFF01A66F, "com.android.vending");   // a touch lighter than #01875F to read on glass
+        brand(0xFF4285F4, "com.android.chrome");
+        brand(0xFFE40000, "tv.airtel.xstream.tvapp");
+        brand(0xFF1F80E0, "in.startv.hotstar");
+        brand(0xFF8230C6, "com.graymatrix.did");
+        brand(0xFF4A78E0, "com.sonyliv");           // Sony LIV navy #0C2D8C, lightened to be readable
+        brand(0xFFF7941D, "com.suntv.sunnxt");
+    }
+
+    private static void brand(int color, String... packages) {
+        for (String p : packages) BRAND.put(p, color);
+    }
+
+    /** The app's brand colour for focused glyphs; white for generic and unknown apps. */
+    static int brandColor(String pkg) {
+        Integer c = BRAND.get(pkg);
+        return c != null ? c : 0xFFFFFFFF;
+    }
+
     private Glyphs() {
     }
 
