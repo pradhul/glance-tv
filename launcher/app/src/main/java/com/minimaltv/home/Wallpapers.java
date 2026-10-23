@@ -60,7 +60,7 @@ final class Wallpapers {
      * Picks a wallpaper at random from the day or night set (all photos if that set is empty), never the one
      * shown last when there is a choice, and decodes it. Null when the assets are missing. Call off the main thread.
      */
-    static Loaded pickAndLoad(Context context, boolean night) {
+    static Loaded pickAndLoad(Context context, boolean night, String forced) {
         AssetManager assets = context.getAssets();
         Theme[] all = readThemes(assets);
         if (all.length == 0) return null;
@@ -69,6 +69,7 @@ final class Wallpapers {
         if (set.isEmpty()) java.util.Collections.addAll(set, all);
         if (set.size() > 1) for (int i = 0; i < set.size(); i++) if (set.get(i).file.equals(lastFile)) set.remove(i--);
         Theme theme = set.get(new Random().nextInt(set.size()));
+        if (forced != null) for (Theme t : all) if (t.file.equals(forced)) theme = t;
         lastFile = theme.file;
         Bitmap sharp = decode(assets, theme.file);
         if (sharp == null) return null;

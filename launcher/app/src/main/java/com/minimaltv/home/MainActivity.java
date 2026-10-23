@@ -233,7 +233,15 @@ public class MainActivity extends Activity {
         root.addView(new CornerMask(this, 24 * density),
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        takeWallpaperExtra(getIntent());
         loadWallpaper();
+
+        // Bottom vignette behind the dock (transparent -> ~35% black) so tiles stand out on bright photos.
+        View vignette = new View(this);
+        vignette.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{0x59000000, 0x26000000, 0x00000000}));
+        FrameLayout.LayoutParams vl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(420), Gravity.BOTTOM);
+        root.addView(vignette, root.indexOfChild(findViewById(R.id.scrimDock)) + 1, vl);
     }
 
     private boolean wallpaperNight;
@@ -248,8 +256,9 @@ public class MainActivity extends Activity {
     private void loadWallpaper() {
         final boolean night = nightHours();
         wallpaperNight = night;
+        final String forced = prefs().getString(KEY_FORCED_WP, null);
         new Thread(() -> {
-            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night);
+            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, forced);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 blurred = loaded.blurred;
@@ -418,6 +427,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (takeWallpaperExtra(intent)) loadWallpaper();
         // Home pressed while the launcher is already running: start over on the first app.
         focusFirstTile();
     }
@@ -604,10 +614,12 @@ public class MainActivity extends Activity {
         // tvOS lift: the focused tile grows a little and gets one soft shadow, and its name appears above the row.
         tile.setOutlineProvider(ROUNDED);
         GradientDrawable ring = new GradientDrawable();
-        ring.setCornerRadius(9 * density);
-        ring.setStroke(Math.max(2, (int) (1.5f * density)), 0xF2FFFFFF);
+        ring.setCornerRadius(GLASS_R * density);
+        ring.setStroke((int) (2 * density + 0.5f), 0xFFFFFFFF);
         tile.setOnFocusChangeListener((v, focused) -> {
             // Glass: a thin white outline while focused, over whatever foreground (hairline) the tile has.
+            Object frostTag = v.getTag(R.id.wallpaper);
+            if (frostTag instanceof FrostDrawable) ((FrostDrawable) frostTag).setFill(focused ? GLASS_FILL_FOCUS : GLASS_FILL);
             Object base = v.getTag(R.id.image);
             if (focused) {
                 if (base == null) v.setTag(R.id.image, v.getForeground() == null ? "none" : v.getForeground());
@@ -631,19 +643,23 @@ public class MainActivity extends Activity {
     /** Frosted tile with a centred icon and a name underneath, for HDMI inputs and apps that have no banner. */
     private void showPlain(View tile, Drawable icon, String label, boolean glyph) {
         ImageView image = tile.findViewById(R.id.image);
-        int tint = (dockPair.tint & 0x00FFFFFF) | 0xA3000000;   // a touch more opaque than a pill
-        FrostDrawable frost = new FrostDrawable(blurred, screenW, screenH, 9 * density, tint, dockPair.edge, density);
+        // Glass (mock-1): heavily blurred photo + ~20% white + a 35% white hairline; brighter on focus.
+        FrostDrawable frost = new FrostDrawable(blurred, screenW, screenH, GLASS_R * density, GLASS_FILL, 0x59FFFFFF, density);
         image.setBackground(frost);
+        tile.setTag(R.id.wallpaper, frost);
+        image.setOutlineProvider(GLASS_OUTLINE);
+        tile.setOutlineProvider(GLASS_OUTLINE);
         trackPosition(image, frost);
         image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         image.setPadding(dp(70), dp(18), dp(70), dp(40));
         // App icons: greyscale (a flat ink tint would turn full-bleed icons into blank squares). Glyphs: ink.
         image.setImageDrawable(Apps.mono(this, icon));
-        image.setImageTintList(glyph ? ColorStateList.valueOf(dockPair.ink) : null);
+        image.setImageTintList(glyph ? ColorStateList.valueOf(0xFFFFFFFF) : null);
         image.setPadding(dp(66), dp(16), dp(66), dp(38));
         TextView text = tile.findViewById(R.id.label);
         text.setText(label);
-        text.setTextColor(dockPair.ink);
+        text.setTextColor(0xFFFFFFFF);
+        text.setShadowLayer(6 * density, 0, density, 0x8C000000);
         text.setVisibility(View.VISIBLE);
     }
 
@@ -841,7 +857,10 @@ public class MainActivity extends Activity {
         else greetingRes = R.string.good_night;
         greeting.setText(greetingRes);
         updateNetwork();
-        if (nightHours() != wallpaperNight) loadWallpaper();   // crossed 06:00 or 22:00: switch sets now
+        if (nightHours() != wallpaperNight) {
+            prefs().edit().remove(KEY_FORCED_WP).apply();   // a forced photo lasts until the next rotation
+            loadWallpaper();
+        }   // crossed 06:00 or 22:00: switch sets now
         if (isNight() != nightApplied) {
             applyTheme(themeTop, themePills, themeDock);
             buildDock();
@@ -1228,6 +1247,27 @@ public class MainActivity extends Activity {
     }
 
     // ---- v10: dock styles -------------------------------------------------------------------------
+
+    private static final float GLASS_R = 18;
+    private static final int GLASS_FILL = 0x38FFFFFF, GLASS_FILL_FOCUS = 0x61FFFFFF;
+    private static final ViewOutlineProvider GLASS_OUTLINE = new ViewOutlineProvider() {
+        @Override
+        public void getOutline(View view, Outline outline) {
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), GLASS_R * view.getResources().getDisplayMetrics().density);
+            outline.setAlpha(0.55f);
+        }
+    };
+    static final String EXTRA_WALLPAPER = "wallpaper";
+    private static final String KEY_FORCED_WP = "forced_wallpaper";
+
+    /** Debug: am start ... --es wallpaper 16.jpg forces that photo until the next day/night rotation. */
+    private boolean takeWallpaperExtra(Intent intent) {
+        String wp = intent == null ? null : intent.getStringExtra(EXTRA_WALLPAPER);
+        if (wp == null || wp.isEmpty()) return false;
+        if (!wp.endsWith(".jpg")) wp = wp + ".jpg";
+        prefs().edit().putString(KEY_FORCED_WP, wp).apply();
+        return true;
+    }
 
     static final int STYLE_GLASS = 0, STYLE_FLOATING = 1, STYLE_POSTERS = 2;
     private static final String KEY_CARD_STYLE = "card_style";

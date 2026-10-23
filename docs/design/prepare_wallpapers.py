@@ -50,7 +50,7 @@ themes = []
 for i, path in enumerate(src, start=1):
     name = f"{i:02d}"
     im = cover(Image.open(path).convert("RGB"))
-    blur = im.filter(ImageFilter.GaussianBlur(28))
+    blur = im.filter(ImageFilter.GaussianBlur(40))
     im.save(os.path.join(ASSETS, f"{name}.jpg"), quality=86, optimize=True, progressive=False)
     # The blurred twin only needs to be sharp enough for a 24px-blur look: half size saves memory on the TV.
     blur.resize((W // 2, H // 2), Image.LANCZOS).save(os.path.join(ASSETS, f"{name}-blur.jpg"), quality=80, optimize=True)
