@@ -604,24 +604,56 @@ public class MainActivity extends Activity {
         return label.isEmpty() ? getString(R.string.hdmi_n, 1) : "HDMI " + label;
     }
 
-    /** The CEC OSD name ("Nintendo Switch"): HdmiDeviceInfo.getDisplayName() when reachable, else the label. */
+    /** Generic names the framework makes up for a CEC device ("playback_1", "HDMI 2"), not worth showing. */
+    private static final java.util.regex.Pattern GENERIC_NAME = java.util.regex.Pattern.compile(
+            "^(playback|recorder|tuner|audio|hdmi)[_ ]?\\d*$", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final int VENDOR_NINTENDO = 0x0009BF;
+
+    /**
+     * The device's name: the user's custom label, then the CEC input's own label, then the CEC OSD name,
+     * skipping generic ones; a Nintendo vendor id gives "Nintendo Switch"; otherwise null (the port label).
+     */
     private String deviceName(TvInputInfo device) {
+        String name = null;
+        try {
+            name = usable(device.loadCustomLabel(this));
+        } catch (RuntimeException ignored) {
+        }
+        if (name == null) {
+            try {
+                name = usable(device.loadLabel(this));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        Object hdmi = null;
         try {
             // getHdmiDeviceInfo() is a system API; read it reflectively so a missing method is not a crash.
-            Object hdmi = TvInputInfo.class.getMethod("getHdmiDeviceInfo").invoke(device);
-            if (hdmi != null) {
-                Object name = hdmi.getClass().getMethod("getDisplayName").invoke(hdmi);
-                if (name != null && !String.valueOf(name).trim().isEmpty()) return String.valueOf(name).trim();
-            }
+            hdmi = TvInputInfo.class.getMethod("getHdmiDeviceInfo").invoke(device);
         } catch (Exception | LinkageError ignored) {
-            // Fall back to the label.
         }
-        try {
-            CharSequence label = device.loadLabel(this);
-            return label == null ? null : label.toString().trim();
-        } catch (RuntimeException e) {
-            return null;
+        if (name == null && hdmi != null) {
+            try {
+                Object n = hdmi.getClass().getMethod("getDisplayName").invoke(hdmi);
+                name = usable(n == null ? null : n.toString());
+            } catch (Exception | LinkageError ignored) {
+            }
         }
+        if (name == null && hdmi != null) {
+            try {
+                Object v = hdmi.getClass().getMethod("getVendorId").invoke(hdmi);
+                if (v instanceof Integer && (Integer) v == VENDOR_NINTENDO) return "Nintendo Switch";
+            } catch (Exception | LinkageError ignored) {
+            }
+        }
+        return name;
+    }
+
+    /** The trimmed, CamelCase-split name, or null when it is empty or generic. */
+    private static String usable(CharSequence raw) {
+        if (raw == null) return null;
+        String s = raw.toString().trim();
+        if (s.isEmpty() || GENERIC_NAME.matcher(s).matches()) return null;
+        return s.replaceAll("(?<=\\p{Ll})(?=\\p{Lu})", " ");
     }
 
     private void addHdmi(HdmiDevice device) {
