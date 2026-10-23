@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Simplified Prime Video mark (play + smile), drawn for this launcher. Normalised (v15): trimmed to the path bounds and scaled to equal optical area in a 1.6:1 box. -->
+<!-- Simplified Prime Video mark (play + smile), drawn for this launcher. Normalised (v16): trimmed to the path bounds; equal optical weight in a 1.6:1 box (wide marks get more area, tall ones capped). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="64dp" android:height="40dp" android:viewportWidth="32" android:viewportHeight="20">
-    <group android:scaleX="0.8076" android:scaleY="0.8076" android:translateX="5.905" android:translateY="-0.468">
+    <group android:scaleX="1.0040" android:scaleY="1.0040" android:translateX="3.450" android:translateY="-3.014">
         <path android:fillColor="#FFFFFFFF" android:pathData="M7.5,3.5L18,10L7.5,16.5ZM2.6,18.4C8.3,22 15.7,22 21.4,18.4L22,19.5C16,23.4 8,23.4 2,19.5ZM19.2,16.6L23,17.9L20.9,21.3Z" />
     </group>
 </vector>

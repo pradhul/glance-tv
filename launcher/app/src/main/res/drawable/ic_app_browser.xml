@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Icons (Apache-2.0). Normalised (v15): trimmed to the path bounds and scaled to equal optical area in a 1.6:1 box. -->
+<!-- Material Icons (Apache-2.0). Normalised (v16): trimmed to the path bounds; equal optical weight in a 1.6:1 box (wide marks get more area, tall ones capped). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="64dp" android:height="40dp" android:viewportWidth="32" android:viewportHeight="20">
     <group android:scaleX="0.8050" android:scaleY="0.8050" android:translateX="6.340" android:translateY="0.340">
