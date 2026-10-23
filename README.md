@@ -16,6 +16,69 @@ A fast home screen for a slow Android TV that looks like an Apple TV: one of you
 
 Forked from [Gathin23/cleanyourtv](https://github.com/Gathin23/cleanyourtv) (MIT) and inspired by [manojm321/jain-tv-launcher](https://github.com/manojm321/jain-tv-launcher). The launcher code is rewritten; the ADB install, debloat and restore tooling and the TV lists in `examples/` come from upstream.
 
+## This fork: what pradhul/minimal-tv-launcher adds
+
+This is [pradhul/minimal-tv-launcher](https://github.com/pradhul/minimal-tv-launcher), a fork of [kleviss/minimal-tv-launcher](https://github.com/kleviss/minimal-tv-launcher) by Klevis Xhyra. All credit for the original Apple TV-style launcher, the frosted panels and the ADB tooling goes upstream. The changes below were made from v4 to v23 and tested on an Android 14 Mi TV (1920×1080).
+
+### Three card styles
+
+You can switch styles from the **Card style…** button in the launcher settings menu. Glass tiles is the default.
+
+| Glass tiles (default) | Floating icons (rainy day) |
+|---|---|
+| ![Glass tiles: analog clock with greeting, date, weather and Wi-Fi on the left, three square frosted tiles on the right, Last used and ⋯ pills underneath](docs/screenshots/glass-tiles-layout-c.png) | ![Floating icons: slim one-line clock, brand-coloured focused icon with a halo and reflection, thin rain streaks over the wallpaper](docs/screenshots/floating-icons-rain.png) |
+| **Tall posters** | **⋯ menu** |
+| ![Tall posters: posters on the left, focused poster widened and tilted with a glare band, slim clock top right, Last used and ⋯ bottom left](docs/screenshots/tall-posters-tilt.png) | ![The ⋯ menu open: All apps, Add app, Inputs, Wi-Fi, Settings](docs/screenshots/more-menu.png) |
+
+- **Glass tiles (layout C):** an analog clock on the left with the greeting, date, weather and Wi-Fi name under it. On the right are square frosted-glass tiles for your apps and HDMI devices, with a **Last used** pill and a **⋯** pill below them.
+- **Floating icons:**
+  - Icons float with no card behind them. The focused icon grows and takes its brand colour (Netflix red, Prime blue, …).
+  - Near-black or near-white brand colours, such as Apple TV's black, switch to white or black depending on how bright the wallpaper is behind the row. Coloured brands are never changed.
+  - The focused icon gets a soft halo in its brand colour and a faint mirrored reflection.
+  - The clock is a single slim line: `8:18 | Fri 23 Oct · ☂ 21°`.
+  - When it is raining (drizzle, rain, showers or thunderstorm), you get a light blue tint and slow diagonal rain streaks. These run at up to 30 fps and stop when the launcher is not on screen.
+- **Tall posters (layout A):**
+  - Tall frosted posters on the left at about half the screen height. The focused one widens to show the app name and what was last playing in it.
+  - A slim digital clock, date and weather sit top right. **Last used** and **⋯** sit bottom left.
+  - The focused poster tilts in 3D toward the direction you moved (about 9°), and a glare band sweeps across its glass once.
+
+### Menus and settings
+
+- **⋯ pill** (Glass and Posters): opens All apps, Add app, Inputs, Wi-Fi and Settings. The menu opens above the pill when there is no room below it.
+- **Long-press Settings, or long-press ⋯:** opens the launcher settings:
+  - **Auto-jump to HDMI:** when a device connected by HDMI turns on (for example a console or a set-top box), the TV switches to that input.
+  - **Night mode:** from 22:00 to 06:00 the wallpaper is dimmed and the text turns amber.
+  - **Simple icons:** single-colour app glyphs from [Simple Icons](https://simpleicons.org) (CC0) and Material Icons (Apache-2.0) instead of the apps' own icons.
+  - **Auto-switch style daily:** rotates Glass → Floating → Posters once a day, at local midnight or when you come back to Home. It is off by default. If you pick a style by hand while it is on, that style becomes today's style and the rotation continues from there.
+  - **Card style…** and the system settings.
+- **Inputs menu:** readable rows listing the HDMI and AV inputs, each opening its input.
+
+### Home screen extras
+
+- **Wallpapers:** separate day and night sets of real photos, chosen by the time of day (06:00–22:00 is day). Each photo has a pre-blurred copy that the frosted panels use.
+- **Weather:** the current temperature and conditions from [Open-Meteo](https://open-meteo.com), which needs no API key. It refreshes every 30 minutes.
+- **Last used pill:** opens the app you last played something in, showing the title when one is known. It is hidden while an HDMI tile is shown.
+- **Wi-Fi:** the full network name with signal bars. HDMI devices show up as tiles named after the device (for example "Nintendo Switch"), and the launcher remembers the name for each port.
+
+### Debug ADB extras
+
+```bash
+adb shell am start -n com.minimaltv.home/.MainActivity --es wallpaper 16        # force a photo (until the next day/night switch)
+adb shell am start -n com.minimaltv.home/.MainActivity --es style glass         # or floating | posters
+adb shell am start -n com.minimaltv.home/.MainActivity --ez forceRain true      # rain overlay (Floating icons), not saved
+adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       # open the ⋯ menu
+```
+
+### Install a build with ADB
+
+```bash
+adb connect <tv ip>:5555
+adb install -r minimal-tv-launcher-v23.apk
+adb shell cmd package set-home-activity --user 0 com.minimaltv.home/.MainActivity
+```
+
+To build it yourself, see **Build and install** below. Release builds are signed with the debug key, so they install over each other.
+
 ## Change the default dock
 
 The dock starts from the list in `launcher/app/src/main/res/values/config.xml`. Once you add or remove an app on the TV, your saved list wins and this file is only the starting point. To go back to the file's list, run `pm clear com.minimaltv.home` over ADB. Find package names with:
