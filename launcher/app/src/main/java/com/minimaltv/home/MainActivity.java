@@ -580,7 +580,16 @@ public class MainActivity extends Activity {
                 if (!connected) continue;
                 String portLabel = portLabel(port);
                 String name = device != null ? deviceName(device) : null;
-                if (name == null || name.isEmpty() || name.equalsIgnoreCase(portLabel)) name = portLabel;
+                String key = KEY_HDMI_NAME_PREFIX + port.getId();
+                android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                if (name != null && !name.isEmpty() && !name.equalsIgnoreCase(portLabel)) {
+                    // Remember it: the CEC child input vanishes when the device idles, the port stays connected.
+                    if (!name.equals(prefs.getString(key, null))) prefs.edit().putString(key, name).apply();
+                } else {
+                    // No CEC child or name right now: use the last name seen on this port (same device, usually).
+                    name = prefs.getString(key, null);
+                    if (name == null || name.isEmpty()) name = portLabel;
+                }
                 result.add(new HdmiDevice(device != null ? device.getId() : port.getId(), name));
             } catch (RuntimeException ignored) {
                 // Leave this port out.
@@ -607,6 +616,7 @@ public class MainActivity extends Activity {
     /** Generic names the framework makes up for a CEC device ("playback_1", "HDMI 2"), not worth showing. */
     private static final java.util.regex.Pattern GENERIC_NAME = java.util.regex.Pattern.compile(
             "^(playback|recorder|tuner|audio|hdmi)[_ ]?\\d*$", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final String KEY_HDMI_NAME_PREFIX = "hdmi_name_";
     private static final int VENDOR_NINTENDO = 0x0009BF;
 
     /**
