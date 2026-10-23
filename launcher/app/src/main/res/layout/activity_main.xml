@@ -48,7 +48,7 @@
         <TextView
             android:id="@+id/btnNetwork"
             style="@style/Pill"
-            android:maxWidth="190dp"
+            android:maxWidth="340dp"
             android:drawableStart="@drawable/ic_wifi"
             android:text="@string/wifi" />
 

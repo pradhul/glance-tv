@@ -515,7 +515,8 @@ public class MainActivity extends Activity {
         }
         View tile = newTile();
         tile.setTag(R.id.label, label);
-        Drawable banner = info.loadBanner(pm);
+        // Glass tiles (mock-1): every app gets the frosted card with its icon and name; banners are not used.
+        Drawable banner = null;
         if (banner != null) {
             ImageView image = tile.findViewById(R.id.image);
             image.setImageDrawable(Apps.mono(this, banner));
@@ -525,7 +526,7 @@ public class MainActivity extends Activity {
             hair.setStroke(Math.max(1, (int) density), 0x14221C17);
             tile.setForeground(hair);
         } else {
-            showPlain(tile, info.loadIcon(pm), label);
+            showPlain(tile, info.loadIcon(pm), label, false);
         }
         tile.setOnClickListener(v -> Apps.start(this, launch));
         tile.setOnLongClickListener(v -> {
@@ -628,7 +629,7 @@ public class MainActivity extends Activity {
     }
 
     /** Frosted tile with a centred icon and a name underneath, for HDMI inputs and apps that have no banner. */
-    private void showPlain(View tile, Drawable icon, String label) {
+    private void showPlain(View tile, Drawable icon, String label, boolean glyph) {
         ImageView image = tile.findViewById(R.id.image);
         int tint = (dockPair.tint & 0x00FFFFFF) | 0xA3000000;   // a touch more opaque than a pill
         FrostDrawable frost = new FrostDrawable(blurred, screenW, screenH, 9 * density, tint, dockPair.edge, density);
@@ -636,8 +637,10 @@ public class MainActivity extends Activity {
         trackPosition(image, frost);
         image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         image.setPadding(dp(70), dp(18), dp(70), dp(40));
+        // App icons: greyscale (a flat ink tint would turn full-bleed icons into blank squares). Glyphs: ink.
         image.setImageDrawable(Apps.mono(this, icon));
-        image.setImageTintList(ColorStateList.valueOf(dockPair.ink));
+        image.setImageTintList(glyph ? ColorStateList.valueOf(dockPair.ink) : null);
+        image.setPadding(dp(66), dp(16), dp(66), dp(38));
         TextView text = tile.findViewById(R.id.label);
         text.setText(label);
         text.setTextColor(dockPair.ink);
@@ -802,7 +805,7 @@ public class MainActivity extends Activity {
         }
         View tile = newTile();
         tile.setTag(R.id.label, device.name);
-        showPlain(tile, getDrawable(console ? R.drawable.ic_game_console : R.drawable.ic_hdmi), device.name);
+        showPlain(tile, getDrawable(console ? R.drawable.ic_game_console : R.drawable.ic_hdmi), device.name, true);
         tile.setOnClickListener(v -> switchTo(device.inputId));
         dock.addView(tile);
     }
@@ -878,8 +881,8 @@ public class MainActivity extends Activity {
             // Show whatever was found so far.
         }
         String label = ethernet ? getString(R.string.ethernet) : wifi ? wifiName() : getString(R.string.offline);
-        // Long network names ("Home FRITZ!Box 7590") would be cut off: keep the first word.
-        if (label.length() > 14 && label.contains(" ")) label = label.substring(0, label.indexOf(' '));
+        // Full name; only very long ones are shortened (the pill also ellipsizes at its max width).
+        if (label.length() > 24) label = label.substring(0, 23).trim() + "…";
         network.setText(label);
         // The dock status: the full name, green dot when connected.
         online = wifi || ethernet;
