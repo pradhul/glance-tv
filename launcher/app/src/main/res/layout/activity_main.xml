@@ -57,12 +57,6 @@
             style="@style/Pill"
             android:text="@string/settings" />
 
-        <!-- Last watched: hidden until something has played, and whenever an HDMI tile is on the dock. -->
-        <TextView
-            android:id="@+id/btnLastWatched"
-            style="@style/Pill"
-            android:maxWidth="260dp"
-            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Top centre: greeting, clock, date. -->
@@ -193,13 +187,14 @@
                 android:clipChildren="false"
                 android:clipToPadding="false">
 
+                <!-- Last used: hidden until something has played, and whenever an HDMI tile is on the dock. -->
                 <TextView
-                    android:id="@+id/btnSleep"
+                    android:id="@+id/btnLastWatched"
                     style="@style/Pill"
                     android:layout_marginStart="0dp"
                     android:layout_marginEnd="6dp"
-                    android:drawableStart="@drawable/ic_moon"
-                    android:text="@string/sleep_off" />
+                    android:maxWidth="320dp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/btnAllApps"
@@ -216,14 +211,4 @@
             </LinearLayout>
         </FrameLayout>
     </LinearLayout>
-
-    <!-- Sleep timer fallback: covers the screen when the timer runs out and the system could not be put to sleep. -->
-    <View
-        android:id="@+id/blackout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#FF000000"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone" />
 </FrameLayout>

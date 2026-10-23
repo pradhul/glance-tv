@@ -121,8 +121,7 @@ public class MainActivity extends Activity {
     private static final String KEY_NIGHT = "night_mode";
     private static final int NIGHT_INK = 0xFFFFE2B8;   // amber-ish off-white
     private static final int[] SLEEP_STEPS = {0, 30, 60, 90};
-    private TextView weatherView, lastWatched, sleepPill;
-    private View blackout;
+    private TextView weatherView, lastWatched;
     private boolean resumed;
     private boolean hdmiShown;
     private final java.util.Set<String> connectedInputs = new java.util.HashSet<>();
@@ -212,10 +211,6 @@ public class MainActivity extends Activity {
         wallpaperView = findViewById(R.id.wallpaper);
         weatherView = findViewById(R.id.weather);
         lastWatched = findViewById(R.id.btnLastWatched);
-        sleepPill = findViewById(R.id.btnSleep);
-        blackout = findViewById(R.id.blackout);
-        sleepPill.setOnClickListener(v -> cycleSleep());
-        blackout.setOnClickListener(v -> hideBlackout());
         findViewById(R.id.btnSettings).setOnLongClickListener(v -> {
             showLauncherSettings();
             return true;
@@ -282,12 +277,12 @@ public class MainActivity extends Activity {
         weatherView.setTextColor(ink);
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(ink));
 
-        for (int id : new int[]{R.id.btnInputs, R.id.btnNetwork, R.id.btnSettings, R.id.btnLastWatched}) {
+        for (int id : new int[]{R.id.btnInputs, R.id.btnNetwork, R.id.btnSettings}) {
             dressPill(findViewById(id), pills);
         }
         dressPill(findViewById(R.id.btnAdd), dockPair);
         dressPill(findViewById(R.id.btnAllApps), dockPair);
-        dressPill(sleepPill, dockPair);
+        dressPill(lastWatched, dockPair);
         showLastWatched();
         appName.setTextColor(dockPair.ink);
         drawStatus();
@@ -795,7 +790,6 @@ public class MainActivity extends Activity {
             applyTheme(themeTop, themePills, themeDock);
             buildDock();
         }
-        updateSleep();
         showLastWatched();
     }
 
@@ -1084,65 +1078,6 @@ public class MainActivity extends Activity {
         weatherView.setVisibility(View.VISIBLE);
     }
 
-    // ---- v5: sleep timer -------------------------------------------------------------------------
-
-    private void cycleSleep() {
-        long at = prefs().getLong(SleepService.KEY_SLEEP_AT, 0);
-        int current = 0;
-        if (at > System.currentTimeMillis()) {
-            // Step from the preset nearest above what is left.
-            long left = (at - System.currentTimeMillis()) / 60_000 + 1;
-            for (int m : SLEEP_STEPS) if (m > 0 && left <= m) { current = m; break; }
-        }
-        int next = 0;
-        for (int i = 0; i < SLEEP_STEPS.length; i++) {
-            if (SLEEP_STEPS[i] == current) next = SLEEP_STEPS[(i + 1) % SLEEP_STEPS.length];
-        }
-        prefs().edit().putLong(SleepService.KEY_SLEEP_AT,
-                next == 0 ? 0 : System.currentTimeMillis() + next * 60_000L).apply();
-        SleepService.poke();
-        updateSleep();
-    }
-
-    private final Runnable sleepTick = this::updateSleep;
-
-    /** Pill label, and the fallback when the timer ran out with no accessibility service to sleep the TV. */
-    private void updateSleep() {
-        ticker.removeCallbacks(sleepTick);
-        long at = prefs().getLong(SleepService.KEY_SLEEP_AT, 0);
-        long now = System.currentTimeMillis();
-        if (at == 0) {
-            sleepPill.setText(R.string.sleep_off);
-            return;
-        }
-        if (now >= at) {
-            prefs().edit().putLong(SleepService.KEY_SLEEP_AT, 0).apply();
-            sleepPill.setText(R.string.sleep_off);
-            if (!SleepService.sleepNow()) showBlackout();
-            return;
-        }
-        int left = (int) ((at - now + 59_999) / 60_000);
-        sleepPill.setText(getString(R.string.sleep_min, left));
-        ticker.postDelayed(sleepTick, Math.min(60_000, at - now + 500));
-    }
-
-    private void showBlackout() {
-        blackout.setVisibility(View.VISIBLE);
-        blackout.requestFocus();
-        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.screenBrightness = 0f;
-        getWindow().setAttributes(lp);
-    }
-
-    private void hideBlackout() {
-        blackout.setVisibility(View.GONE);
-        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
-        getWindow().setAttributes(lp);
-        focusFirstTile();
-    }
-
     // ---- v5: last watched ------------------------------------------------------------------------
 
     private void showLastWatched() {
@@ -1157,7 +1092,7 @@ public class MainActivity extends Activity {
         String title = prefs().getString(MediaListener.KEY_TITLE, null);
         String pkg = prefs().getString(MediaListener.KEY_PKG, null);
         if (hdmiShown || pkg == null) {
-            if (lastWatched.hasFocus()) findViewById(R.id.btnSettings).requestFocus();
+            if (lastWatched.hasFocus()) findViewById(R.id.btnAllApps).requestFocus();
             lastWatched.setVisibility(View.GONE);
             return;
         }
@@ -1177,7 +1112,7 @@ public class MainActivity extends Activity {
         icon.setBounds(0, 0, size, size);
         lastWatched.setCompoundDrawableTintList(null);   // keep the greyscaled icon, not a flat ink shape
         lastWatched.setCompoundDrawables(icon, null, null, null);
-        lastWatched.setText(title != null ? title + " \u00B7 " + label : "Resume \u00B7 " + label);
+        lastWatched.setText(title != null ? "Last used \u00B7 " + title + " \u00B7 " + label : "Last used \u00B7 " + label);
         lastWatched.setVisibility(View.VISIBLE);
     }
 
