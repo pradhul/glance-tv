@@ -1308,8 +1308,6 @@ public class MainActivity extends Activity {
     private float rowLum = 0.5f;
     /** Background darker than this counts as dark (white glyph), otherwise light (black glyph). */
     private static final float ROW_DARK_BELOW = 0.5f;
-    /** A brand colour closer than this in luminance to the background is swapped for black/white. */
-    private static final float MIN_BRAND_CONTRAST = 0.3f;
 
     /** Average luminance of the bitmap's lower-middle region (x 20-80%, y 55-95%), sampled on a grid. */
     private static float rowLuminance(Bitmap b) {
@@ -1330,9 +1328,17 @@ public class MainActivity extends Activity {
         return (0.2126f * Color.red(c) + 0.7152f * Color.green(c) + 0.0722f * Color.blue(c)) / 255f;
     }
 
-    /** The brand colour, unless it is too close to the background's brightness: then white on dark, black on light. */
+    /**
+     * The brand colour as is, unless it is near-achromatic (HSV saturation < 0.15) and near black or white
+     * (luminance < 0.15 or > 0.85), like Apple TV's black: those become white on a dark row, black on a light one.
+     * Chromatic brand colours (Netflix red, Prime blue, ...) are never swapped.
+     */
     private int focusColour(int brand) {
-        if (Math.abs(lum(brand) - rowLum) >= MIN_BRAND_CONTRAST) return brand;
+        float[] hsv = new float[3];
+        Color.colorToHSV(brand, hsv);
+        float l = lum(brand);
+        boolean neutralExtreme = hsv[1] < 0.15f && (l < 0.15f || l > 0.85f);
+        if (!neutralExtreme) return brand;
         return rowLum < ROW_DARK_BELOW ? 0xFFFFFFFF : 0xFF000000;
     }
 
