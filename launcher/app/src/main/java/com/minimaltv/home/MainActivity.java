@@ -119,6 +119,11 @@ public class MainActivity extends Activity {
     // ---- v5 ----
     private static final String KEY_AUTO_HDMI = "auto_hdmi";
     private static final String KEY_NIGHT = "night_mode";
+    private static final String KEY_SIMPLE_ICONS = "simple_icons";
+
+    private boolean simpleIcons() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_SIMPLE_ICONS, true);
+    }
     private static final int NIGHT_INK = 0xFFFFE2B8;   // amber-ish off-white
     private static final int[] SLEEP_STEPS = {0, 30, 60, 90};
     private TextView weatherView, lastWatched;
@@ -522,7 +527,9 @@ public class MainActivity extends Activity {
         if (style != STYLE_GLASS) {
             String sub = pkg.equals(prefs().getString(MediaListener.KEY_PKG, null))
                     ? prefs().getString(MediaListener.KEY_TITLE, null) : null;
-            View t = styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false);
+            View t = simpleIcons()
+                    ? styledTile(style, label, sub, Glyphs.forApp(this, pkg, label), null, true)
+                    : styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false);
             t.setOnClickListener(v -> Apps.start(this, launch));
             t.setOnLongClickListener(v -> {
                 confirmRemove(pkg, label);
@@ -544,7 +551,8 @@ public class MainActivity extends Activity {
             hair.setStroke(Math.max(1, (int) density), 0x14221C17);
             tile.setForeground(hair);
         } else {
-            showPlain(tile, info.loadIcon(pm), label, false);
+            if (simpleIcons()) showPlain(tile, Glyphs.forApp(this, pkg, label), label, true);
+            else showPlain(tile, info.loadIcon(pm), label, false);
         }
         tile.setOnClickListener(v -> Apps.start(this, launch));
         tile.setOnLongClickListener(v -> {
@@ -1125,12 +1133,16 @@ public class MainActivity extends Activity {
 
     /** Long-press on Settings: the launcher's own switches, plus the way to the system settings. */
     private void showLauncherSettings() {
-        String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night)};
-        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true)};
+        String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night), getString(R.string.pref_simple_icons)};
+        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true), simpleIcons()};
         AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(R.string.launcher_settings)
                 .setMultiChoiceItems(items, checked, (d, which, on) -> {
-                    prefs().edit().putBoolean(which == 0 ? KEY_AUTO_HDMI : KEY_NIGHT, on).apply();
+                    prefs().edit().putBoolean(which == 0 ? KEY_AUTO_HDMI : which == 1 ? KEY_NIGHT : KEY_SIMPLE_ICONS, on).apply();
+                    if (which == 2) {
+                        buildDock();
+                        showLastWatched();
+                    }
                     if (which == 1) {
                         applyTheme(themeTop, themePills, themeDock);
                         buildDock();
@@ -1204,7 +1216,7 @@ public class MainActivity extends Activity {
         try {
             ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
             label = String.valueOf(info.loadLabel(pm));
-            icon = Apps.mono(this, info.loadIcon(pm));
+            icon = simpleIcons() ? Glyphs.forApp(this, pkg, label) : Apps.mono(this, info.loadIcon(pm));
         } catch (PackageManager.NameNotFoundException | RuntimeException e) {
             lastWatched.setVisibility(View.GONE);
             return;
@@ -1212,7 +1224,8 @@ public class MainActivity extends Activity {
         int size = dp(16);
         icon = icon.mutate();
         icon.setBounds(0, 0, size, size);
-        lastWatched.setCompoundDrawableTintList(null);   // keep the greyscaled icon, not a flat ink shape
+        if (simpleIcons()) icon.setTint(dockPair != null ? dockPair.ink : 0xFFFFFFFF);
+        lastWatched.setCompoundDrawableTintList(null);   // tint set on the drawable itself
         lastWatched.setCompoundDrawables(icon, null, null, null);
         lastWatched.setText(title != null ? "Last used \u00B7 " + title + " \u00B7 " + label : "Last used \u00B7 " + label);
         lastWatched.setVisibility(View.VISIBLE);

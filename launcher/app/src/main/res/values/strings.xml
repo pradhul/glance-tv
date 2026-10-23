@@ -37,4 +37,5 @@
         <item>Floating icons</item>
         <item>Tall posters</item>
     </string-array>
+    <string name="pref_simple_icons">Simple icons</string>
 </resources>
