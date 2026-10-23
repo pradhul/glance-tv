@@ -24,6 +24,7 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -45,13 +46,15 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Home screen: a random wallpaper, greeting, clock and date centred near the top, three frosted pills top right,
- * and a dock with the pinned apps plus All apps, the focused app's name above the row, VPN status and Add app
- * below it. Pinned apps start as the list in config.xml; the Add app pill pins more, and holding OK on a tile
+ * and a dock with the pinned apps plus one tile per connected HDMI device, the focused app's name above the row,
+ * the network status (Wi-Fi name, VPN when one is up) and the All apps and Add app pills below it. Pinned apps start as the list in config.xml; the Add app pill pins more, and holding OK on a tile
  * removes it. The look follows docs/design/mockups/d-hybrid.html: every piece of chrome belongs to the TOP or
  * the DOCK region and takes that region's colour pair, light frost + dark ink on a pale photo or the reverse
  * on a dark one, as sampled at build time into assets/wallpapers/themes.json.
@@ -88,7 +91,7 @@ public class MainActivity extends Activity {
 
     private TextView greeting;
     private TextView network;
-    private TextView vpnStatus;
+    private TextView netStatus;
     private TextView appName;
     private LinearLayout dock;
     private ImageView wallpaperView;
@@ -98,6 +101,18 @@ public class MainActivity extends Activity {
     private PopupWindow inputsPopup;
     private AlertDialog removeDialog;
     private boolean networkCallbackRegistered;
+    private boolean inputCallbackRegistered;
+    private boolean online;
+    private String netLabel = "";
+    private int signalLevel = -1;   // 0-4 bars on Wi-Fi, -1 for none
+    private final Handler ticker = new Handler(Looper.getMainLooper());
+    private final Runnable signalTick = new Runnable() {
+        @Override
+        public void run() {
+            updateNetwork();
+            ticker.postDelayed(this, 10_000);
+        }
+    };
     private boolean focusPlaced;
     private float density;
 
@@ -126,6 +141,34 @@ public class MainActivity extends Activity {
         public void onLost(Network network) {
             refresh();
         }
+
+        @Override
+        public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) {
+            updateNetwork();   // the Wi-Fi name arrives with the capabilities
+        }
+    };
+
+    /** An HDMI device plugged in, switched on, unplugged or renamed over CEC: rebuild the dock's input tiles. */
+    private final TvInputManager.TvInputCallback inputCallback = new TvInputManager.TvInputCallback() {
+        @Override
+        public void onInputStateChanged(String inputId, int state) {
+            rebuildKeepingFocus();
+        }
+
+        @Override
+        public void onInputAdded(String inputId) {
+            rebuildKeepingFocus();
+        }
+
+        @Override
+        public void onInputRemoved(String inputId) {
+            rebuildKeepingFocus();
+        }
+
+        @Override
+        public void onInputUpdated(String inputId) {
+            rebuildKeepingFocus();
+        }
     };
 
     @Override
@@ -137,7 +180,7 @@ public class MainActivity extends Activity {
         screenH = getResources().getDisplayMetrics().heightPixels;
         greeting = findViewById(R.id.greeting);
         network = findViewById(R.id.btnNetwork);
-        vpnStatus = findViewById(R.id.vpnStatus);
+        netStatus = findViewById(R.id.vpnStatus);
         appName = findViewById(R.id.appName);
         dock = findViewById(R.id.dock);
         wallpaperView = findViewById(R.id.wallpaper);
@@ -146,6 +189,7 @@ public class MainActivity extends Activity {
         network.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         findViewById(R.id.btnSettings).setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
         findViewById(R.id.btnAdd).setOnClickListener(v -> startPicker());
+        findViewById(R.id.btnAllApps).setOnClickListener(v -> startActivity(new Intent(this, AllAppsActivity.class)));
 
         // Until the photo is decoded, everything is drawn with the light pair on black: readable, and only
         // for a moment. The wallpaper thread then applies the real theme.
@@ -188,9 +232,9 @@ public class MainActivity extends Activity {
             dressPill(findViewById(id), pills);
         }
         dressPill(findViewById(R.id.btnAdd), dockPair);
+        dressPill(findViewById(R.id.btnAllApps), dockPair);
         appName.setTextColor(dockPair.ink);
-        vpnStatus.setTextColor(dockPair.ink);
-        drawVpn(vpnHandle != 0);
+        drawStatus();
 
         // Scrims: a radial lift behind the clock block, a linear lift under the dock, each in its region's tint.
         int topTint = top.tint & 0x00FFFFFF;
@@ -245,17 +289,38 @@ public class MainActivity extends Activity {
         } catch (RuntimeException e) {
             // The header still refreshes on resume and every minute.
         }
+        try {
+            TvInputManager tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
+            if (tim != null) {
+                tim.registerCallback(inputCallback, new Handler(Looper.getMainLooper()));
+                inputCallbackRegistered = true;
+            }
+        } catch (RuntimeException e) {
+            // No live updates; the dock is still rebuilt on resume.
+        }
+        rebuildKeepingFocus();
         refresh();
+        ticker.removeCallbacks(signalTick);
+        ticker.postDelayed(signalTick, 10_000);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         unregisterReceiver(minuteTick);
+        ticker.removeCallbacks(signalTick);
         if (networkCallbackRegistered) {
             networkCallbackRegistered = false;
             try {
                 getSystemService(ConnectivityManager.class).unregisterNetworkCallback(networkCallback);
+            } catch (RuntimeException ignored) {
+                // Already gone.
+            }
+        }
+        if (inputCallbackRegistered) {
+            inputCallbackRegistered = false;
+            try {
+                ((TvInputManager) getSystemService(Context.TV_INPUT_SERVICE)).unregisterCallback(inputCallback);
             } catch (RuntimeException ignored) {
                 // Already gone.
             }
@@ -303,15 +368,30 @@ public class MainActivity extends Activity {
                 // One broken app must not take the whole home screen down: leave its tile out.
             }
         }
-        View all = newTile();
-        showPlain(all, getDrawable(R.drawable.ic_apps), getString(R.string.all_apps));
-        all.setTag(R.id.label, getString(R.string.all_apps));
-        all.setOnClickListener(v -> startActivity(new Intent(this, AllAppsActivity.class)));
-        dock.addView(all);
+        int apps = dock.getChildCount();
+        try {
+            for (HdmiDevice device : connectedHdmi()) addHdmi(device);
+        } catch (RuntimeException e) {
+            // No input tiles rather than no home screen.
+        }
+        if (dock.getChildCount() == 0) {
+            findViewById(R.id.btnAllApps).setFocusedByDefault(true);
+            appName.setText("");
+            return;
+        }
+        dock.setTag(apps);
         // The window picks this tile when it first takes focus, so the first dock app is selected on start.
         dock.getChildAt(0).setFocusedByDefault(true);
         View focused = getCurrentFocus();
         appName.setText(focused != null && focused.getParent() == dock ? String.valueOf(focused.getTag(R.id.label)) : "");
+    }
+
+    /** Rebuilds the dock and puts focus back on the tile at the same place, if the focus was in the dock. */
+    private void rebuildKeepingFocus() {
+        View focused = getCurrentFocus();
+        int index = focused != null && focused.getParent() == dock ? dock.indexOfChild(focused) : -1;
+        buildDock();
+        if (index >= 0 && dock.getChildCount() > 0) dock.getChildAt(Math.min(index, dock.getChildCount() - 1)).requestFocus();
     }
 
     private void addApp(PackageManager pm, String pkg) {
@@ -384,8 +464,10 @@ public class MainActivity extends Activity {
             savePinned(list);
         }
         buildDock();
-        // The new app is the last tile before All apps: select it.
-        dock.getChildAt(Math.max(0, dock.getChildCount() - 2)).requestFocus();
+        // The new app is the last app tile, before any HDMI tiles: select it.
+        Object apps = dock.getTag();
+        int last = (apps instanceof Integer ? (Integer) apps : dock.getChildCount()) - 1;
+        if (last >= 0 && last < dock.getChildCount()) dock.getChildAt(last).requestFocus();
     }
 
     private void confirmRemove(String pkg, String label) {
@@ -396,7 +478,8 @@ public class MainActivity extends Activity {
                     list.remove(pkg);
                     savePinned(list);
                     buildDock();
-                    dock.getChildAt(0).requestFocus();
+                    if (dock.getChildCount() > 0) dock.getChildAt(0).requestFocus();
+                    else findViewById(R.id.btnAllApps).requestFocus();
                 })
                 .show();
     }
@@ -421,7 +504,7 @@ public class MainActivity extends Activity {
         return tile;
     }
 
-    /** Frosted tile with a centred icon and a name underneath, for All apps and apps that have no banner. */
+    /** Frosted tile with a centred icon and a name underneath, for HDMI inputs and apps that have no banner. */
     private void showPlain(View tile, Drawable icon, String label) {
         ImageView image = tile.findViewById(R.id.image);
         int tint = (dockPair.tint & 0x00FFFFFF) | 0xA3000000;   // a touch more opaque than a pill
@@ -436,6 +519,138 @@ public class MainActivity extends Activity {
         text.setText(label);
         text.setTextColor(dockPair.ink);
         text.setVisibility(View.VISIBLE);
+    }
+
+    // ---- HDMI inputs -----------------------------------------------------------------------------
+
+    /** A connected HDMI port: the input to tune (the CEC device's own input when there is one) and its name. */
+    private static final class HdmiDevice {
+        final String inputId;
+        final String name;
+
+        HdmiDevice(String inputId, String name) {
+            this.inputId = inputId;
+            this.name = name;
+        }
+    }
+
+    /**
+     * The HDMI ports with something switched on behind them, in port order. A port counts when its own state,
+     * or that of a CEC device input under it (getParentId() = the port), is INPUT_STATE_CONNECTED. Standby
+     * (state 1) is what this TV reports for an empty port, so it does not count.
+     */
+    private List<HdmiDevice> connectedHdmi() {
+        List<HdmiDevice> result = new ArrayList<>();
+        TvInputManager tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
+        if (tim == null) return result;
+        List<TvInputInfo> all;
+        try {
+            all = tim.getTvInputList();
+        } catch (RuntimeException e) {
+            return result;
+        }
+        if (all == null) return result;
+        Map<String, TvInputInfo> ports = new LinkedHashMap<>();
+        for (TvInputInfo info : all) {
+            try {
+                if (info.isPassthroughInput() && info.getType() == TvInputInfo.TYPE_HDMI && info.getParentId() == null) {
+                    ports.put(info.getId(), info);
+                }
+            } catch (RuntimeException ignored) {
+                // Skip an input that cannot be read.
+            }
+        }
+        List<TvInputInfo> sorted = new ArrayList<>(ports.values());
+        Collections.sort(sorted, (a, b) ->
+                String.valueOf(a.loadLabel(this)).compareToIgnoreCase(String.valueOf(b.loadLabel(this))));
+        for (TvInputInfo port : sorted) {
+            try {
+                boolean connected = state(tim, port.getId()) == TvInputManager.INPUT_STATE_CONNECTED;
+                TvInputInfo device = null;
+                for (TvInputInfo info : all) {
+                    if (!port.getId().equals(info.getParentId())) continue;
+                    int s = state(tim, info.getId());
+                    if (s == TvInputManager.INPUT_STATE_CONNECTED) {
+                        device = info;
+                        connected = true;
+                        break;
+                    }
+                    if (device == null && s != TvInputManager.INPUT_STATE_DISCONNECTED) device = info;
+                }
+                if (!connected) continue;
+                String portLabel = portLabel(port);
+                String name = device != null ? deviceName(device) : null;
+                if (name == null || name.isEmpty() || name.equalsIgnoreCase(portLabel)) name = portLabel;
+                result.add(new HdmiDevice(device != null ? device.getId() : port.getId(), name));
+            } catch (RuntimeException ignored) {
+                // Leave this port out.
+            }
+        }
+        return result;
+    }
+
+    private static int state(TvInputManager tim, String id) {
+        try {
+            return tim.getInputState(id);
+        } catch (RuntimeException e) {
+            return TvInputManager.INPUT_STATE_DISCONNECTED;
+        }
+    }
+
+    /** "HDMI 1": the port's label, or one built from its number. */
+    private String portLabel(TvInputInfo port) {
+        String label = String.valueOf(port.loadLabel(this));
+        if (label.toUpperCase(Locale.ROOT).contains("HDMI")) return label;
+        return label.isEmpty() ? getString(R.string.hdmi_n, 1) : "HDMI " + label;
+    }
+
+    /** The CEC OSD name ("Nintendo Switch"): HdmiDeviceInfo.getDisplayName() when reachable, else the label. */
+    private String deviceName(TvInputInfo device) {
+        try {
+            // getHdmiDeviceInfo() is a system API; read it reflectively so a missing method is not a crash.
+            Object hdmi = TvInputInfo.class.getMethod("getHdmiDeviceInfo").invoke(device);
+            if (hdmi != null) {
+                Object name = hdmi.getClass().getMethod("getDisplayName").invoke(hdmi);
+                if (name != null && !String.valueOf(name).trim().isEmpty()) return String.valueOf(name).trim();
+            }
+        } catch (Exception | LinkageError ignored) {
+            // Fall back to the label.
+        }
+        try {
+            CharSequence label = device.loadLabel(this);
+            return label == null ? null : label.toString().trim();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private void addHdmi(HdmiDevice device) {
+        String lower = device.name.toLowerCase(Locale.ROOT);
+        boolean console = lower.contains("switch") || lower.contains("nintendo");
+        View tile = newTile();
+        tile.setTag(R.id.label, device.name);
+        showPlain(tile, getDrawable(console ? R.drawable.ic_game_console : R.drawable.ic_hdmi), device.name);
+        tile.setOnClickListener(v -> switchTo(device.inputId));
+        dock.addView(tile);
+    }
+
+    /** Tunes the TV app to a passthrough input; if nothing takes the intent, opens the TV app itself. */
+    private void switchTo(String inputId) {
+        try {
+            Intent view = new Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(inputId))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(view);
+            return;
+        } catch (RuntimeException e) {
+            // Try the TV app below.
+        }
+        try {
+            Intent tv = new Intent(Intent.ACTION_VIEW, TvContract.Channels.CONTENT_URI)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(tv);
+        } catch (RuntimeException e) {
+            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
     }
 
     // ---- header ----------------------------------------------------------------------------------
@@ -456,6 +671,8 @@ public class MainActivity extends Activity {
     private void updateNetwork() {
         boolean wifi = false;
         boolean ethernet = false;
+        String ssid = null;
+        int rssi = Integer.MIN_VALUE;
         Network vpn = null;
         try {
             ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -465,7 +682,16 @@ public class MainActivity extends Activity {
                 if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
                     vpn = n;
                 } else if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-                    wifi |= caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+                    boolean isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+                    wifi |= isWifi;
+                    if (isWifi && ssid == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        Object info = caps.getTransportInfo();
+                        if (info instanceof WifiInfo) {
+                            ssid = cleanSsid(((WifiInfo) info).getSSID());
+                            rssi = ((WifiInfo) info).getRssi();
+                        }
+                        if (rssi == Integer.MIN_VALUE || rssi <= -127) rssi = caps.getSignalStrength();
+                    }
                     ethernet |= caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
                 }
             }
@@ -476,23 +702,53 @@ public class MainActivity extends Activity {
         // Long network names ("Home FRITZ!Box 7590") would be cut off: keep the first word.
         if (label.length() > 14 && label.contains(" ")) label = label.substring(0, label.indexOf(' '));
         network.setText(label);
+        // The dock status: the full name, green dot when connected.
+        online = wifi || ethernet;
+        if (wifi && !ethernet) {
+            if (ssid == null) ssid = cleanSsid(wifiSsid());
+            netLabel = ssid != null ? ssid : getString(R.string.wifi_connected);
+            if (rssi == Integer.MIN_VALUE || rssi <= -127 || rssi == NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED) rssi = wifiRssi();
+            signalLevel = rssi <= -127 ? -1 : Math.max(0, Math.min(4, WifiManager.calculateSignalLevel(rssi, 5)));
+        } else {
+            netLabel = getString(ethernet ? R.string.ethernet : R.string.no_wifi);
+            signalLevel = -1;
+        }
         showVpn(vpn);
     }
 
     /** The Wi-Fi network name when it can be read, otherwise the plain label. */
     private String wifiName() {
+        String ssid = cleanSsid(wifiSsid());
+        return ssid != null ? ssid : getString(R.string.wifi);
+    }
+
+    private String wifiSsid() {
         try {
             WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             WifiInfo info = wm.getConnectionInfo();
-            String ssid = info == null ? null : info.getSSID();
-            if (ssid != null) {
-                ssid = ssid.replace("\"", "").trim();
-                if (!ssid.isEmpty() && !ssid.contains("unknown")) return ssid;
-            }
-        } catch (RuntimeException ignored) {
-            // Fall through to the plain label.
+            return info == null ? null : info.getSSID();
+        } catch (RuntimeException e) {
+            return null;
         }
-        return getString(R.string.wifi);
+    }
+
+    /** The current Wi-Fi RSSI in dBm, or -127 when unknown. */
+    private int wifiRssi() {
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            WifiInfo info = wm.getConnectionInfo();
+            return info == null ? -127 : info.getRssi();
+        } catch (RuntimeException e) {
+            return -127;
+        }
+    }
+
+    /** Strips the quotes; null for an empty or "<unknown ssid>" name (no location permission, or none yet). */
+    private static String cleanSsid(String ssid) {
+        if (ssid == null) return null;
+        ssid = ssid.replace("\"", "").trim();
+        if (ssid.isEmpty() || ssid.contains("unknown ssid") || ssid.equals(WifiManager.UNKNOWN_SSID)) return null;
+        return ssid;
     }
 
     // ---- VPN -------------------------------------------------------------------------------------
@@ -501,7 +757,7 @@ public class MainActivity extends Activity {
         if (vpn == null) {
             vpnHandle = 0;
             vpnCountry = null;
-            drawVpn(false);
+            drawStatus();
             return;
         }
         long handle = vpn.getNetworkHandle();
@@ -515,7 +771,7 @@ public class MainActivity extends Activity {
         if (vpnCountry == null && (newConnection || (!vpnLookingUp && now - vpnLastLookup > 60_000))) {
             lookUpVpnCountry(handle, now);
         }
-        drawVpn(true);
+        drawStatus();
     }
 
     private void lookUpVpnCountry(long handle, long now) {
@@ -525,19 +781,35 @@ public class MainActivity extends Activity {
             if (handle != vpnHandle) return;   // the VPN changed while we were asking
             vpnLookingUp = false;
             vpnCountry = country;
-            drawVpn(true);
+            drawStatus();
         }));
     }
 
-    private void drawVpn(boolean on) {
-        String text;
-        if (!on) text = getString(R.string.vpn_off);
-        else if (vpnCountry != null) text = getString(R.string.vpn_country, vpnCountry);
-        else text = getString(vpnLookingUp ? R.string.vpn_checking : R.string.vpn_on);
-        vpnStatus.setText(text);
+    /** "Home WiFi" with a green dot, "Home WiFi · VPN · Germany" while a VPN is up, "No Wi-Fi" with a grey one. */
+    private void drawStatus() {
+        String text = netLabel.isEmpty() ? getString(R.string.no_wifi) : netLabel;
+        if (vpnHandle != 0) {
+            String vpn;
+            if (vpnCountry != null) vpn = getString(R.string.vpn_country, vpnCountry);
+            else vpn = getString(vpnLookingUp ? R.string.vpn_checking : R.string.vpn_on);
+            text = getString(R.string.with_vpn, text, vpn);
+        }
+        netStatus.setText(text);
         if (dockPair == null) return;
-        vpnStatus.setTextColor(dockPair.ink);
-        vpnStatus.setCompoundDrawableTintList(ColorStateList.valueOf(on ? dockPair.dotOn : dockPair.dotOff));
+        netStatus.setTextColor(dockPair.ink);
+        // Tinted one by one: the dot is green or grey, the signal bars take the ink.
+        Drawable dot = getDrawable(R.drawable.ic_dot).mutate();
+        dot.setBounds(0, 0, dot.getIntrinsicWidth(), dot.getIntrinsicHeight());
+        dot.setTint(online ? dockPair.dotOn : dockPair.dotOff);
+        Drawable bars = null;
+        if (signalLevel >= 0) {
+            bars = getDrawable(R.drawable.ic_signal).mutate();
+            bars.setLevel(signalLevel);
+            bars.setBounds(0, 0, bars.getIntrinsicWidth(), bars.getIntrinsicHeight());
+            bars.setTint(dockPair.ink);
+        }
+        netStatus.setCompoundDrawableTintList(null);
+        netStatus.setCompoundDrawables(dot, null, bars, null);
     }
 
     private void open(Intent intent) {

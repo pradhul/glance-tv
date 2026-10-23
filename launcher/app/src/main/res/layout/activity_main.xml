@@ -100,7 +100,7 @@
             android:fontFamily="sans-serif" />
     </LinearLayout>
 
-    <!-- Bottom: the focused app's name, the row of tiles, then VPN status left and Add app right. -->
+    <!-- Bottom: the focused app's name, the row of tiles, then the network status left and All apps + Add app right. -->
     <LinearLayout
         android:id="@+id/dockBlock"
         android:layout_width="wrap_content"
@@ -148,7 +148,7 @@
             android:layout_marginTop="14dp"
             android:clipChildren="false">
 
-            <!-- A status label, not a button: no material, a dot and text straight on the dock lift. -->
+            <!-- A status label, not a button: no material, a dot and the Wi-Fi name straight on the dock lift. -->
             <TextView
                 android:id="@+id/vpnStatus"
                 android:layout_width="wrap_content"
@@ -158,17 +158,33 @@
                 android:drawableStart="@drawable/ic_dot"
                 android:drawablePadding="6dp"
                 android:singleLine="true"
-                android:text="@string/vpn_off"
+                android:maxWidth="560dp"
+                android:ellipsize="end"
+                android:text="@string/no_wifi"
                 android:textSize="13sp"
                 android:fontFamily="sans-serif" />
 
-            <TextView
-                android:id="@+id/btnAdd"
-                style="@style/Pill"
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
                 android:layout_gravity="end|center_vertical"
-                android:layout_marginStart="0dp"
-                android:drawableStart="@drawable/ic_add"
-                android:text="@string/add_app" />
+                android:orientation="horizontal"
+                android:clipChildren="false"
+                android:clipToPadding="false">
+
+                <TextView
+                    android:id="@+id/btnAllApps"
+                    style="@style/Pill"
+                    android:layout_marginStart="0dp"
+                    android:drawableStart="@drawable/ic_apps_small"
+                    android:text="@string/all_apps" />
+
+                <TextView
+                    android:id="@+id/btnAdd"
+                    style="@style/Pill"
+                    android:drawableStart="@drawable/ic_add"
+                    android:text="@string/add_app" />
+            </LinearLayout>
         </FrameLayout>
     </LinearLayout>
 </FrameLayout>

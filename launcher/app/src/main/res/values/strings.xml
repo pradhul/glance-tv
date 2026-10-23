@@ -10,7 +10,6 @@
     <string name="wifi">Wi-Fi</string>
     <string name="ethernet">Ethernet</string>
     <string name="offline">Offline</string>
-    <string name="vpn_off">VPN off</string>
     <string name="vpn_on">VPN on</string>
     <string name="vpn_checking">VPN · checking…</string>
     <string name="vpn_country">VPN · %1$s</string>
@@ -20,4 +19,8 @@
     <string name="remove_from_home">Remove from home</string>
     <string name="not_available">Not available</string>
     <string name="no_inputs">No inputs found</string>
+    <string name="no_wifi">No Wi-Fi</string>
+    <string name="wifi_connected">Wi-Fi connected</string>
+    <string name="with_vpn">%1$s · %2$s</string>
+    <string name="hdmi_n">HDMI %1$d</string>
 </resources>

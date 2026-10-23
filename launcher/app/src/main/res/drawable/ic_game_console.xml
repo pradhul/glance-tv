@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A handheld console with two detachable side controllers (generic drawing), for a connected Switch. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp" android:height="40dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- left controller -->
+    <path android:fillType="evenOdd" android:fillColor="#FFFFFFFF"
+        android:pathData="M7,4H5.5A3.5,3.5 0,0 0,2 7.5v9A3.5,3.5 0,0 0,5.5 20H7zM4.5,9.5a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0z" />
+    <!-- screen -->
+    <path android:fillType="evenOdd" android:fillColor="#FFFFFFFF"
+        android:pathData="M8,4h8v16H8zM9.2,5.5v13h5.6v-13z" />
+    <!-- right controller -->
+    <path android:fillType="evenOdd" android:fillColor="#FFFFFFFF"
+        android:pathData="M17,4h1.5A3.5,3.5 0,0 1,22 7.5v9A3.5,3.5 0,0 1,18.5 20H17zM17.1,14.5a1.2,1.2 0,1 0,2.4 0a1.2,1.2 0,1 0,-2.4 0z" />
+</vector>
