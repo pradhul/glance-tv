@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu rows: near-black on the solid focused row, light on the dark popup otherwise. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true" android:color="#FF111111" />
+    <item android:state_selected="true" android:color="#FF111111" />
+    <item android:state_pressed="true" android:color="#FF111111" />
+    <item android:color="#FFEEEEEE" />
+</selector>

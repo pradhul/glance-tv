@@ -22,4 +22,19 @@
         <item name="android:focusable">true</item>
         <item name="android:clickable">true</item>
     </style>
+
+    <!-- Launcher dialogs: dark translucent card, rows like the inputs menu (solid light row + #111 text on focus). -->
+    <style name="MenuDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/popup_bg</item>
+        <item name="android:textColorPrimary">#FFEEEEEE</item>
+        <item name="android:textColorAlertDialogListItem">@color/menu_row_text</item>
+        <item name="android:colorAccent">#FF8A8A8A</item>
+        <item name="android:colorControlNormal">#FF8A8A8A</item>
+        <item name="android:colorControlActivated">#FF8A8A8A</item>
+        <item name="android:listSelector">@drawable/menu_row_bg</item>
+    </style>
+    <style name="MenuDialog.Night">
+        <item name="android:textColorPrimary">#FFFFE2B8</item>
+        <item name="android:textColorAlertDialogListItem">@color/menu_row_text_night</item>
+    </style>
 </resources>

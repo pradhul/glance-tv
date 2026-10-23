@@ -550,7 +550,7 @@ public class MainActivity extends Activity {
     }
 
     private void confirmRemove(String pkg, String label) {
-        removeDialog = new AlertDialog.Builder(this)
+        removeDialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(label)
                 .setItems(new CharSequence[]{getString(R.string.remove_from_home)}, (dialog, which) -> {
                     List<String> list = pinned();
@@ -560,7 +560,9 @@ public class MainActivity extends Activity {
                     if (dock.getChildCount() > 0) dock.getChildAt(0).requestFocus();
                     else findViewById(R.id.btnAllApps).requestFocus();
                 })
-                .show();
+                .create();
+        dressDialog(removeDialog);
+        removeDialog.show();
     }
 
     private View newTile() {
@@ -973,6 +975,7 @@ public class MainActivity extends Activity {
         popup.setAnimationStyle(0);
         for (TvInputInfo info : inputs) {
             TextView row = (TextView) getLayoutInflater().inflate(R.layout.input_row, rows, false);
+            row.setTextColor(getColorStateList(isNight() ? R.color.menu_row_text_night : R.color.menu_row_text));
             String label = String.valueOf(info.loadLabel(this));
             boolean hdmi = info.getType() == TvInputInfo.TYPE_HDMI;
             row.setText(hdmi && !label.toUpperCase(Locale.ROOT).contains("HDMI") ? "HDMI " + label : label);
@@ -1043,7 +1046,7 @@ public class MainActivity extends Activity {
     private void showLauncherSettings() {
         String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night)};
         boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true)};
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(R.string.launcher_settings)
                 .setMultiChoiceItems(items, checked, (d, which, on) -> {
                     prefs().edit().putBoolean(which == 0 ? KEY_AUTO_HDMI : KEY_NIGHT, on).apply();
@@ -1053,7 +1056,9 @@ public class MainActivity extends Activity {
                     }
                 })
                 .setPositiveButton(R.string.system_settings, (d, w) -> open(new Intent(Settings.ACTION_SETTINGS)))
-                .show();
+                .create();
+        dressDialog(dialog);
+        dialog.show();
     }
 
     // ---- v5: night mode --------------------------------------------------------------------------
@@ -1128,6 +1133,26 @@ public class MainActivity extends Activity {
             return;
         }
         Apps.start(this, launch);
+    }
+
+    private int menuTheme() {
+        return isNight() ? R.style.MenuDialog_Night : R.style.MenuDialog;
+    }
+
+    /** Rows get the menu selector; the button text stays readable on the dark card. */
+    private void dressDialog(AlertDialog dialog) {
+        dialog.setOnShowListener(d -> {
+            android.widget.ListView list = dialog.getListView();
+            if (list != null) {
+                list.setSelector(R.drawable.menu_row_bg);
+                list.setDrawSelectorOnTop(false);
+            }
+            android.widget.Button b = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (b != null) {
+                b.setTextColor(getColorStateList(isNight() ? R.color.menu_row_text_night : R.color.menu_row_text));
+                b.setBackgroundResource(R.drawable.menu_row_bg);
+            }
+        });
     }
 
     private int dp(int value) {
