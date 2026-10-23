@@ -671,7 +671,7 @@ public class MainActivity extends Activity {
         // App icons: greyscale (a flat ink tint would turn full-bleed icons into blank squares). Glyphs: ink.
         image.setImageDrawable(Apps.mono(this, icon));
         image.setImageTintList(glyph ? ColorStateList.valueOf(0xFFFFFFFF) : null);
-        image.setPadding(dp(66), dp(16), dp(66), dp(38));
+        image.setPadding(dp(61), dp(16), dp(61), dp(48));   // a 70x44dp icon box
         TextView text = tile.findViewById(R.id.label);
         text.setText(label);
         text.setTextColor(0xFFFFFFFF);
@@ -1221,9 +1221,10 @@ public class MainActivity extends Activity {
             lastWatched.setVisibility(View.GONE);
             return;
         }
-        int size = dp(16);
         icon = icon.mutate();
-        icon.setBounds(0, 0, size, size);
+        // Glyphs live in a 1.6:1 box; real icons are square.
+        if (simpleIcons()) icon.setBounds(0, 0, dp(29), dp(18));
+        else icon.setBounds(0, 0, dp(16), dp(16));
         if (simpleIcons()) icon.setTint(dockPair != null ? dockPair.ink : 0xFFFFFFFF);
         lastWatched.setCompoundDrawableTintList(null);   // tint set on the drawable itself
         lastWatched.setCompoundDrawables(icon, null, null, null);
@@ -1333,8 +1334,8 @@ public class MainActivity extends Activity {
         image.setAlpha(0.82f);
         image.setElevation(dp(6));
         image.setOutlineProvider(null);
-        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(84), dp(84));
-        ip.topMargin = dp(30);
+        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(112), dp(70));
+        ip.topMargin = dp(40);
         tile.addView(image, ip);
 
         TextView name = new TextView(this);
@@ -1391,7 +1392,7 @@ public class MainActivity extends Activity {
         else shown = Apps.mono(this, shown);
         image.setImageDrawable(shown);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(dp(64), dp(40), Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         ip.topMargin = dp(24);
         tile.addView(image, ip);
 

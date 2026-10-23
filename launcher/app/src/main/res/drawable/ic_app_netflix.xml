@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Simple Icons (CC0), simpleicons.org -->
+<!-- Simple Icons (CC0), simpleicons.org. Normalised (v15): trimmed to the path bounds and scaled to equal optical area in a 1.6:1 box. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z" />
+    android:width="64dp" android:height="40dp" android:viewportWidth="32" android:viewportHeight="20">
+    <group android:scaleX="0.7500" android:scaleY="0.7500" android:translateX="7.000" android:translateY="1.000">
+        <path android:fillColor="#FFFFFFFF" android:pathData="m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z" />
+    </group>
 </vector>

@@ -66,12 +66,13 @@ final class Glyphs {
         private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF box = new RectF();
-        private final int size;
+        private final int w, h;
 
         Letter(String label, float density) {
             String l = label == null ? "" : label.trim();
             letter = l.isEmpty() ? "?" : l.substring(0, l.offsetByCodePoints(0, 1)).toUpperCase(Locale.ROOT);
-            size = (int) (48 * density);
+            w = (int) (64 * density);   // same 1.6:1 box as the vector glyphs
+            h = (int) (40 * density);
             stroke.setStyle(Paint.Style.STROKE);
             stroke.setColor(0xFFFFFFFF);
             text.setColor(0xFFFFFFFF);
@@ -106,12 +107,12 @@ final class Glyphs {
 
         @Override
         public int getIntrinsicWidth() {
-            return size;
+            return w;
         }
 
         @Override
         public int getIntrinsicHeight() {
-            return size;
+            return h;
         }
 
         @Override
