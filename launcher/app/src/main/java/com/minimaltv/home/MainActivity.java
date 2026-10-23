@@ -460,7 +460,7 @@ public class MainActivity extends Activity {
         // The window picks this tile when it first takes focus, so the first dock app is selected on start.
         dock.getChildAt(0).setFocusedByDefault(true);
         View focused = getCurrentFocus();
-        appName.setText(focused != null && focused.getParent() == dock ? String.valueOf(focused.getTag(R.id.label)) : "");
+        appName.setText(cardStyle() == STYLE_GLASS && focused != null && focused.getParent() == dock ? String.valueOf(focused.getTag(R.id.label)) : "");
     }
 
     /** Rebuilds the dock and puts focus back on the tile at the same place, if the focus was in the dock. */
@@ -500,6 +500,19 @@ public class MainActivity extends Activity {
             return;
         }
         String label = String.valueOf(info.loadLabel(pm));
+        int style = cardStyle();
+        if (style != STYLE_GLASS) {
+            String sub = pkg.equals(prefs().getString(MediaListener.KEY_PKG, null))
+                    ? prefs().getString(MediaListener.KEY_TITLE, null) : null;
+            View t = styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false);
+            t.setOnClickListener(v -> Apps.start(this, launch));
+            t.setOnLongClickListener(v -> {
+                confirmRemove(pkg, label);
+                return true;
+            });
+            dock.addView(t);
+            return;
+        }
         View tile = newTile();
         tile.setTag(R.id.label, label);
         Drawable banner = info.loadBanner(pm);
@@ -589,7 +602,19 @@ public class MainActivity extends Activity {
         image.setClipToOutline(true);
         // tvOS lift: the focused tile grows a little and gets one soft shadow, and its name appears above the row.
         tile.setOutlineProvider(ROUNDED);
+        GradientDrawable ring = new GradientDrawable();
+        ring.setCornerRadius(9 * density);
+        ring.setStroke(Math.max(2, (int) (1.5f * density)), 0xF2FFFFFF);
         tile.setOnFocusChangeListener((v, focused) -> {
+            // Glass: a thin white outline while focused, over whatever foreground (hairline) the tile has.
+            Object base = v.getTag(R.id.image);
+            if (focused) {
+                if (base == null) v.setTag(R.id.image, v.getForeground() == null ? "none" : v.getForeground());
+                v.setForeground(ring);
+            } else if (base != null) {
+                v.setForeground(base instanceof Drawable ? (Drawable) base : null);
+                v.setTag(R.id.image, null);
+            }
             v.animate()
                     .scaleX(focused ? FOCUS_SCALE : 1f)
                     .scaleY(focused ? FOCUS_SCALE : 1f)
@@ -767,6 +792,14 @@ public class MainActivity extends Activity {
     private void addHdmi(HdmiDevice device) {
         String lower = device.name.toLowerCase(Locale.ROOT);
         boolean console = lower.contains("switch") || lower.contains("nintendo");
+        int style = cardStyle();
+        if (style != STYLE_GLASS) {
+            int res = console ? R.drawable.ic_game_console : R.drawable.ic_hdmi;
+            View t = styledTile(style, device.name, null, getDrawable(res), null, true);
+            t.setOnClickListener(v -> switchTo(device.inputId));
+            dock.addView(t);
+            return;
+        }
         View tile = newTile();
         tile.setTag(R.id.label, device.name);
         showPlain(tile, getDrawable(console ? R.drawable.ic_game_console : R.drawable.ic_hdmi), device.name);
@@ -1074,6 +1107,22 @@ public class MainActivity extends Activity {
                     }
                 })
                 .setPositiveButton(R.string.system_settings, (d, w) -> open(new Intent(Settings.ACTION_SETTINGS)))
+                .setNeutralButton(R.string.card_style, (d, w) -> showCardStyle())
+                .create();
+        dressDialog(dialog);
+        dialog.show();
+    }
+
+    private void showCardStyle() {
+        String[] names = getResources().getStringArray(R.array.card_styles);
+        AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
+                .setTitle(R.string.card_style)
+                .setSingleChoiceItems(names, cardStyle(), (d, which) -> {
+                    prefs().edit().putInt(KEY_CARD_STYLE, which).apply();
+                    d.dismiss();
+                    buildDock();
+                    focusFirstTile();
+                })
                 .create();
         dressDialog(dialog);
         dialog.show();
@@ -1165,12 +1214,187 @@ public class MainActivity extends Activity {
                 list.setSelector(R.drawable.menu_row_bg);
                 list.setDrawSelectorOnTop(false);
             }
-            android.widget.Button b = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEUTRAL}) {
+            android.widget.Button b = dialog.getButton(which);
             if (b != null) {
                 b.setTextColor(getColorStateList(isNight() ? R.color.menu_row_text_night : R.color.menu_row_text));
                 b.setBackgroundResource(R.drawable.menu_row_bg);
             }
+            }
         });
+    }
+
+    // ---- v10: dock styles -------------------------------------------------------------------------
+
+    static final int STYLE_GLASS = 0, STYLE_FLOATING = 1, STYLE_POSTERS = 2;
+    private static final String KEY_CARD_STYLE = "card_style";
+
+    private int cardStyle() {
+        return prefs().getInt(KEY_CARD_STYLE, STYLE_GLASS);
+    }
+
+    private static android.graphics.ColorMatrixColorFilter greyFilter() {
+        android.graphics.ColorMatrix m = new android.graphics.ColorMatrix();
+        m.setSaturation(0);
+        return new android.graphics.ColorMatrixColorFilter(m);
+    }
+
+    /**
+     * A dock item for the floating and poster styles. icon: the greyscale (or ink-tinted, for HDMI glyphs)
+     * picture; colour: a separate copy shown in full colour on focus (floating only), null for none.
+     */
+    private View styledTile(int style, String label, String subtitle, Drawable icon, Drawable colour, boolean glyph) {
+        return style == STYLE_FLOATING ? floatingTile(label, icon, colour, glyph) : posterTile(label, subtitle, icon, glyph);
+    }
+
+    private View floatingTile(String label, Drawable icon, Drawable colour, boolean glyph) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER_HORIZONTAL);
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setClipChildren(false);
+        tile.setTag(R.id.label, label);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(150), dp(170));
+        lp.setMarginEnd(dp(24));
+        tile.setLayoutParams(lp);
+
+        ImageView image = new ImageView(this);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        boolean grey = getResources().getBoolean(R.bool.icons_greyscale);
+        Drawable shown = icon.mutate();
+        if (glyph) shown.setTint(dockPair.ink);
+        else if (grey) shown.setColorFilter(greyFilter());
+        image.setImageDrawable(shown);
+        image.setAlpha(0.82f);
+        image.setElevation(dp(6));
+        image.setOutlineProvider(null);
+        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(84), dp(84));
+        ip.topMargin = dp(30);
+        tile.addView(image, ip);
+
+        TextView name = new TextView(this);
+        name.setText(label);
+        name.setTextColor(dockPair.ink);
+        name.setTextSize(15);
+        name.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        name.setGravity(Gravity.CENTER);
+        name.setAlpha(0f);
+        name.setShadowLayer(8, 0, 2, 0x80000000);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        np.topMargin = dp(22);
+        tile.addView(name, np);
+
+        tile.setOnFocusChangeListener((v, focused) -> {
+            // Full colour while focused (only the icon swaps; no relayout), grey again after.
+            if (colour != null) image.setImageDrawable(focused ? colour : shown);
+            image.animate().scaleX(focused ? 1.55f : 1f).scaleY(focused ? 1.55f : 1f).alpha(focused ? 1f : 0.82f)
+                    .translationY(focused ? -dp(8) : 0).setDuration(150).start();
+            name.animate().alpha(focused ? 1f : 0f).setDuration(150).start();
+            appName.setText("");
+        });
+        return tile;
+    }
+
+    private View posterTile(String label, String subtitle, Drawable icon, boolean glyph) {
+        final int narrow = dp(90), wide = dp(300), height = dp(210);
+        FrameLayout tile = new FrameLayout(this);
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setTag(R.id.label, label);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(narrow, height);
+        lp.setMarginEnd(dp(13));
+        tile.setLayoutParams(lp);
+        int tint = (dockPair.tint & 0x00FFFFFF) | 0xA3000000;
+        FrostDrawable frost = new FrostDrawable(blurred, screenW, screenH, 11 * density, tint, dockPair.edge, density);
+        tile.setBackground(frost);
+        trackPosition(tile, frost);
+        GradientDrawable ring = new GradientDrawable();
+        ring.setCornerRadius(11 * density);
+        ring.setStroke(Math.max(2, (int) (1.5f * density)), 0xE6FFFFFF);
+        tile.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 11 * density);
+            }
+        });
+
+        ImageView image = new ImageView(this);
+        Drawable shown = icon.mutate();
+        if (glyph) shown.setTint(dockPair.ink);
+        else shown = Apps.mono(this, shown);
+        image.setImageDrawable(shown);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        FrameLayout.LayoutParams ip = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        ip.topMargin = dp(24);
+        tile.addView(image, ip);
+
+        // Narrow: the name runs bottom-to-top along the card.
+        TextView vertical = new TextView(this);
+        vertical.setText(label);
+        vertical.setTextColor(dockPair.ink);
+        vertical.setTextSize(13);
+        vertical.setAlpha(0.85f);
+        vertical.setSingleLine(true);
+        vertical.setEllipsize(TextUtils.TruncateAt.END);
+        vertical.setGravity(Gravity.CENTER_VERTICAL);
+        vertical.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        FrameLayout.LayoutParams vp = new FrameLayout.LayoutParams(dp(96), dp(24), Gravity.BOTTOM | Gravity.START);
+        tile.addView(vertical, vp);
+        vertical.setPivotX(0);
+        vertical.setPivotY(0);
+        vertical.setRotation(-90);
+        vertical.setTranslationX(dp(32));
+        vertical.setTranslationY(dp(-14) + dp(24));
+
+        // Wide: name + subtitle bottom-left, icon top-right.
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        TextView big = new TextView(this);
+        big.setText(label);
+        big.setTextColor(dockPair.ink);
+        big.setTextSize(22);
+        big.setSingleLine(true);
+        big.setEllipsize(TextUtils.TruncateAt.END);
+        big.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+        text.addView(big);
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = new TextView(this);
+            sub.setText(subtitle);
+            sub.setTextColor(dockPair.ink);
+            sub.setAlpha(0.75f);
+            sub.setTextSize(12);
+            sub.setSingleLine(true);
+            sub.setEllipsize(TextUtils.TruncateAt.END);
+            text.addView(sub);
+        }
+        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(wide - dp(36), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.START);
+        tp.leftMargin = dp(18);
+        tp.bottomMargin = dp(16);
+        text.setAlpha(0f);
+        tile.addView(text, tp);
+
+        tile.setOnFocusChangeListener((v, focused) -> {
+            appName.setText("");
+            v.setForeground(focused ? ring : null);
+            int from = v.getLayoutParams().width, to = focused ? wide : narrow;
+            android.animation.ValueAnimator a = android.animation.ValueAnimator.ofInt(from, to);
+            a.setDuration(170);
+            a.addUpdateListener(an -> {
+                v.getLayoutParams().width = (int) an.getAnimatedValue();
+                v.requestLayout();
+            });
+            a.start();
+            v.animate().translationZ(focused ? 18 * density : 0f).setDuration(170).start();
+            vertical.animate().alpha(focused ? 0f : 0.85f).setDuration(120).start();
+            text.animate().alpha(focused ? 1f : 0f).setStartDelay(focused ? 80 : 0).setDuration(140).start();
+            // Icon slides to the top-right of the wide card.
+            image.animate().translationX(focused ? (wide - narrow) / 2f + dp(20) : 0).translationY(focused ? -dp(4) : 0)
+                    .scaleX(focused ? 1.3f : 1f).scaleY(focused ? 1.3f : 1f).setDuration(170).start();
+        });
+        return tile;
     }
 
     private int dp(int value) {
