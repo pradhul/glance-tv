@@ -56,6 +56,13 @@
             android:id="@+id/btnSettings"
             style="@style/Pill"
             android:text="@string/settings" />
+
+        <!-- Last watched: hidden until something has played, and whenever an HDMI tile is on the dock. -->
+        <TextView
+            android:id="@+id/btnLastWatched"
+            style="@style/Pill"
+            android:maxWidth="260dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Top centre: greeting, clock, date. -->
@@ -98,6 +105,20 @@
             android:singleLine="true"
             android:textSize="18sp"
             android:fontFamily="sans-serif" />
+
+        <!-- Weather for Singasandra, Bangalore; hidden until the first answer. -->
+        <TextView
+            android:id="@+id/weather"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:drawablePadding="6dp"
+            android:gravity="center_vertical"
+            android:singleLine="true"
+            android:alpha="0.85"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Bottom: the focused app's name, the row of tiles, then the network status left and All apps + Add app right. -->
@@ -173,6 +194,14 @@
                 android:clipToPadding="false">
 
                 <TextView
+                    android:id="@+id/btnSleep"
+                    style="@style/Pill"
+                    android:layout_marginStart="0dp"
+                    android:layout_marginEnd="6dp"
+                    android:drawableStart="@drawable/ic_moon"
+                    android:text="@string/sleep_off" />
+
+                <TextView
                     android:id="@+id/btnAllApps"
                     style="@style/Pill"
                     android:layout_marginStart="0dp"
@@ -187,4 +216,14 @@
             </LinearLayout>
         </FrameLayout>
     </LinearLayout>
+
+    <!-- Sleep timer fallback: covers the screen when the timer runs out and the system could not be put to sleep. -->
+    <View
+        android:id="@+id/blackout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone" />
 </FrameLayout>
