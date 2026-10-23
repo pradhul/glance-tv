@@ -1119,7 +1119,7 @@ public class MainActivity extends Activity {
             rows.addView(row);
         }
         inputsPopup = popup;
-        popup.showAsDropDown(anchor, 0, dp(10), Gravity.START);
+        showNear(popup, rows, anchor, dp(220), false);
         rows.getChildAt(0).requestFocus();
     }
 
@@ -1484,8 +1484,27 @@ public class MainActivity extends Activity {
             rows.addView(row);
         }
         morePopup = popup;
-        popup.showAsDropDown(anchor, 0, dp(10), Gravity.END);
+        showNear(popup, rows, anchor, dp(240), !(cardStyle() == STYLE_POSTERS));
         rows.getChildAt(0).requestFocus();
+    }
+
+    /**
+     * v23: shows a popup next to its anchor, below it when it fits, otherwise above it, kept on screen.
+     * showAsDropDown with a WRAP_CONTENT height cannot tell that a menu under a pill near the bottom edge
+     * (poster layout A) runs off the screen, so the ⋯ menu was drawn out of sight.
+     */
+    private void showNear(PopupWindow popup, View content, View anchor, int width, boolean alignEnd) {
+        content.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(screenH, View.MeasureSpec.AT_MOST));
+        int h = content.getMeasuredHeight();
+        int[] xy = new int[2];
+        anchor.getLocationOnScreen(xy);
+        int x = alignEnd ? xy[0] + anchor.getWidth() - width : xy[0];
+        x = Math.max(dp(16), Math.min(x, screenW - width - dp(16)));
+        int below = xy[1] + anchor.getHeight() + dp(10);
+        int y = below + h <= screenH - dp(16) ? below : xy[1] - dp(10) - h;
+        y = Math.max(dp(16), y);
+        popup.showAtLocation(anchor, Gravity.TOP | Gravity.START, x, y);
     }
 
     /** Luminance (0-1) of the wallpaper behind the icon row; recomputed whenever the wallpaper changes. */
@@ -1560,6 +1579,7 @@ public class MainActivity extends Activity {
 
     static final String EXTRA_FORCE_RAIN = "forceRain";
     static final String EXTRA_STYLE = "style";
+    static final String EXTRA_OPEN_MORE = "openMore";
     private static final String KEY_AUTO_STYLE = "auto_style";
     private static final String KEY_AUTO_OFFSET = "auto_style_offset";
     private LinearLayout slimLine;
@@ -1670,6 +1690,16 @@ public class MainActivity extends Activity {
         if (intent.hasExtra(EXTRA_FORCE_RAIN)) {
             forceRain = intent.getBooleanExtra(EXTRA_FORCE_RAIN, false);
             updateRain();
+        }
+        if (intent.getBooleanExtra(EXTRA_OPEN_MORE, false)) {
+            intent.removeExtra(EXTRA_OPEN_MORE);
+            ticker.postDelayed(() -> {
+                if (!isFinishing() && morePill != null && morePill.getVisibility() == View.VISIBLE
+                        && morePill.isAttachedToWindow() && morePill.getWindowToken() != null) {
+                    morePill.requestFocus();
+                    showMore(morePill);
+                }
+            }, 800);
         }
         String st = intent.getStringExtra(EXTRA_STYLE);
         if (st != null) {
@@ -1795,7 +1825,7 @@ public class MainActivity extends Activity {
 
     private View posterTile(String label, String subtitle, Drawable icon, boolean glyph) {
         final int narrow = dp(80), wide = dp(280), height = dp(240);   // v22: layout A sizes
-        FrameLayout tile = new FrameLayout(this);
+        PosterFrame tile = new PosterFrame(this, 11 * density);
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setTag(R.id.label, label);
@@ -1875,17 +1905,9 @@ public class MainActivity extends Activity {
         text.setAlpha(0f);
         tile.addView(text, tp);
 
-        // v21: a diagonal glare band that sweeps across the glass once on focus.
-        View glare = new View(this);
-        glare.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0x00FFFFFF, 0x38FFFFFF, 0x00FFFFFF}));
-        glare.setRotation(20);
-        glare.setAlpha(0f);
-        FrameLayout.LayoutParams gp = new FrameLayout.LayoutParams(dp(70), (int) (height * 1.5f), Gravity.START | Gravity.TOP);
-        gp.topMargin = -(int) (height * 0.25f);
-        tile.addView(glare, gp);
-        tile.setCameraDistance(8000 * density);
-
+        // v23: the glare is painted by PosterFrame itself (on top of the content, clipped to the card). The
+        // camera sits close enough (v21 used 8000*density, which flattened a 4 degree tilt to nothing).
+        tile.setCameraDistance(2200 * density);
         tile.setOnFocusChangeListener((v, focused) -> {
             appName.setText("");
             // v21: tilt a few degrees toward the direction focus came from (parallax), flat when unfocused.
@@ -1893,16 +1915,13 @@ public class MainActivity extends Activity {
             if (focused) {
                 float dir = lastPosterIndex < 0 || idx >= lastPosterIndex ? 1f : -1f;
                 lastPosterIndex = idx;
-                v.animate().rotationY(4f * dir).rotationX(-1.5f).setDuration(220).start();
-                glare.animate().cancel();
-                glare.setTranslationX(-dp(110));
-                glare.setAlpha(1f);
-                glare.animate().translationX(wide + dp(30)).setStartDelay(90).setDuration(650)
-                        .withEndAction(() -> glare.setAlpha(0f)).start();
+                // Hold ~9 degrees toward the direction focus moved, plus 3 degrees back.
+                tile.animate().rotationY(-9f * dir).rotationX(3f).translationZ(18 * density)
+                        .setStartDelay(0).setDuration(260).start();
+                tile.sweep(120, 700);
             } else {
-                v.animate().rotationY(0f).rotationX(0f).setDuration(170).start();
-                glare.animate().cancel();
-                glare.setAlpha(0f);
+                tile.animate().rotationY(0f).rotationX(0f).translationZ(0f).setStartDelay(0).setDuration(200).start();
+                tile.stopGlare();
             }
             v.setForeground(focused ? ring : null);
             int from = v.getLayoutParams().width, to = focused ? wide : narrow;
@@ -1913,7 +1932,6 @@ public class MainActivity extends Activity {
                 v.requestLayout();
             });
             a.start();
-            v.animate().translationZ(focused ? 18 * density : 0f).setDuration(170).start();
             vertical.animate().alpha(focused ? 0f : 0.85f).setDuration(120).start();
             text.animate().alpha(focused ? 1f : 0f).setStartDelay(focused ? 80 : 0).setDuration(140).start();
             // Icon slides to the top-right of the wide card.
