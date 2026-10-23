@@ -233,11 +233,27 @@ public class MainActivity extends Activity {
         root.addView(new CornerMask(this, 24 * density),
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        loadWallpaper();
+    }
+
+    private boolean wallpaperNight;
+    private float wallpaperLum = 0.5f;
+
+    /** Day (06:00-22:00) or night set, by the clock alone (independent of the night-mode text setting). */
+    private static boolean nightHours() {
+        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        return hour >= 22 || hour < 6;
+    }
+
+    private void loadWallpaper() {
+        final boolean night = nightHours();
+        wallpaperNight = night;
         new Thread(() -> {
-            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this);
+            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 blurred = loaded.blurred;
+                wallpaperLum = loaded.theme.luminance;
                 wallpaperView.setImageBitmap(loaded.sharp);
                 applyTheme(loaded.theme.topDark, loaded.theme.pillsDark, loaded.theme.dockDark);
                 buildDock();
@@ -264,7 +280,8 @@ public class MainActivity extends Activity {
             top.ink = NIGHT_INK;
             pills.ink = NIGHT_INK;
             dockPair.ink = NIGHT_INK;
-            wallpaperView.setColorFilter(0x8C000000, android.graphics.PorterDuff.Mode.SRC_ATOP);
+            // Already-dark photos (the night set) need less: ~35% instead of ~55%.
+            wallpaperView.setColorFilter(wallpaperLum < 0.45f ? 0x59000000 : 0x8C000000, android.graphics.PorterDuff.Mode.SRC_ATOP);
         } else {
             wallpaperView.clearColorFilter();
         }
@@ -788,6 +805,7 @@ public class MainActivity extends Activity {
         else greetingRes = R.string.good_night;
         greeting.setText(greetingRes);
         updateNetwork();
+        if (nightHours() != wallpaperNight) loadWallpaper();   // crossed 06:00 or 22:00: switch sets now
         if (isNight() != nightApplied) {
             applyTheme(themeTop, themePills, themeDock);
             buildDock();

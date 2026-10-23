@@ -25,6 +25,8 @@ final class Wallpapers {
         final boolean topDark;
         final boolean pillsDark;
         final boolean dockDark;
+        boolean night;        // in the night set (22:00-06:00)
+        float luminance;      // mean of the three regions, 0-1
 
         Theme(String file, boolean topDark, boolean pillsDark, boolean dockDark) {
             this.file = file;
@@ -52,12 +54,22 @@ final class Wallpapers {
     private Wallpapers() {
     }
 
-    /** Picks a wallpaper at random and decodes it. Null when the assets are missing or broken. Call off the main thread. */
-    static Loaded pickAndLoad(Context context) {
+    private static String lastFile;
+
+    /**
+     * Picks a wallpaper at random from the day or night set (all photos if that set is empty), never the one
+     * shown last when there is a choice, and decodes it. Null when the assets are missing. Call off the main thread.
+     */
+    static Loaded pickAndLoad(Context context, boolean night) {
         AssetManager assets = context.getAssets();
-        Theme[] themes = readThemes(assets);
-        if (themes.length == 0) return null;
-        Theme theme = themes[new Random().nextInt(themes.length)];
+        Theme[] all = readThemes(assets);
+        if (all.length == 0) return null;
+        java.util.List<Theme> set = new java.util.ArrayList<>();
+        for (Theme t : all) if (t.night == night) set.add(t);
+        if (set.isEmpty()) java.util.Collections.addAll(set, all);
+        if (set.size() > 1) for (int i = 0; i < set.size(); i++) if (set.get(i).file.equals(lastFile)) set.remove(i--);
+        Theme theme = set.get(new Random().nextInt(set.size()));
+        lastFile = theme.file;
         Bitmap sharp = decode(assets, theme.file);
         if (sharp == null) return null;
         Bitmap blurred = decode(assets, theme.file.replace(".jpg", "-blur.jpg"));
@@ -76,6 +88,10 @@ final class Wallpapers {
                         "dark".equals(o.optString("top")),
                         "dark".equals(o.optString("pills")),
                         "dark".equals(o.optString("dock")));
+                themes[i].night = "night".equals(o.optString("set"));
+                JSONObject lum = o.optJSONObject("luminance");
+                themes[i].luminance = lum == null ? 0.5f
+                        : (float) (lum.optDouble("top", .5) + lum.optDouble("pills", .5) + lum.optDouble("dock", .5)) / 3f;
             }
             return themes;
         } catch (Exception e) {

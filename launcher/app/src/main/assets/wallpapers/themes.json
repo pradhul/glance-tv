@@ -9,7 +9,8 @@
    "top": 0.82,
    "pills": 0.82,
    "dock": 0.86
-  }
+  },
+  "set": "day"
  },
  {
   "file": "02.jpg",
@@ -21,7 +22,8 @@
    "top": 0.76,
    "pills": 0.78,
    "dock": 0.77
-  }
+  },
+  "set": "day"
  },
  {
   "file": "03.jpg",
@@ -33,7 +35,8 @@
    "top": 0.82,
    "pills": 0.8,
    "dock": 0.88
-  }
+  },
+  "set": "day"
  },
  {
   "file": "04.jpg",
@@ -45,7 +48,8 @@
    "top": 0.34,
    "pills": 0.2,
    "dock": 0.45
-  }
+  },
+  "set": "night"
  },
  {
   "file": "05.jpg",
@@ -57,7 +61,8 @@
    "top": 0.62,
    "pills": 0.73,
    "dock": 0.57
-  }
+  },
+  "set": "day"
  },
  {
   "file": "06.jpg",
@@ -69,7 +74,8 @@
    "top": 0.71,
    "pills": 0.72,
    "dock": 0.42
-  }
+  },
+  "set": "day"
  },
  {
   "file": "07.jpg",
@@ -81,6 +87,111 @@
    "top": 0.75,
    "pills": 0.64,
    "dock": 0.52
+  },
+  "set": "day"
+ },
+ {
+  "file": "08.jpg",
+  "source": "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a (starry sky)",
+  "set": "night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.11,
+   "pills": 0.05,
+   "dock": 0.39
+  }
+ },
+ {
+  "file": "09.jpg",
+  "source": "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1 (ocean at dusk)",
+  "set": "night",
+  "top": "light",
+  "pills": "light",
+  "dock": "light",
+  "luminance": {
+   "top": 0.69,
+   "pills": 0.72,
+   "dock": 0.44
+  }
+ },
+ {
+  "file": "10.jpg",
+  "source": "https://images.unsplash.com/photo-1514565131-fce0801e5785 (city lights at dusk)",
+  "set": "night",
+  "top": "light",
+  "pills": "light",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.69,
+   "pills": 0.59,
+   "dock": 0.37
+  }
+ },
+ {
+  "file": "11.jpg",
+  "source": "https://images.unsplash.com/photo-1519681393784-d120267933ba (moonlit mountains, milky way)",
+  "set": "night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.41,
+   "pills": 0.17,
+   "dock": 0.21
+  }
+ },
+ {
+  "file": "12.jpg",
+  "source": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7 (aurora)",
+  "set": "night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.38,
+   "pills": 0.31,
+   "dock": 0.34
+  }
+ },
+ {
+  "file": "13.jpg",
+  "source": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05 (misty hills)",
+  "set": "day",
+  "top": "light",
+  "pills": "light",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.69,
+   "pills": 0.63,
+   "dock": 0.28
+  }
+ },
+ {
+  "file": "14.jpg",
+  "source": "https://images.unsplash.com/photo-1439066615861-d1af74d74000 (calm lake)",
+  "set": "day",
+  "top": "light",
+  "pills": "light",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.61,
+   "pills": 0.54,
+   "dock": 0.42
+  }
+ },
+ {
+  "file": "15.jpg",
+  "source": "https://images.unsplash.com/photo-1509316785289-025f5b846b35 (desert)",
+  "set": "day",
+  "top": "light",
+  "pills": "light",
+  "dock": "light",
+  "luminance": {
+   "top": 0.68,
+   "pills": 0.61,
+   "dock": 0.46
   }
  }
 ]
