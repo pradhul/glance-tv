@@ -37,6 +37,7 @@ import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
@@ -208,6 +209,7 @@ public class MainActivity extends Activity {
         density = getResources().getDisplayMetrics().density;
         screenW = getResources().getDisplayMetrics().widthPixels;
         screenH = getResources().getDisplayMetrics().heightPixels;
+        posterScale = Math.min(1f, screenH / density / 540f);
         greeting = findViewById(R.id.greeting);
         network = findViewById(R.id.btnNetwork);
         netStatus = findViewById(R.id.vpnStatus);
@@ -510,6 +512,7 @@ public class MainActivity extends Activity {
         dock.setTag(apps);
         // The window picks this tile when it first takes focus, so the first dock app is selected on start.
         dock.getChildAt(0).setFocusedByDefault(true);
+        fitDock();
         View focused = getCurrentFocus();
         appName.setText(cardStyle() == STYLE_GLASS && focused != null && focused.getParent() == dock ? String.valueOf(focused.getTag(R.id.label)) : "");
     }
@@ -1399,7 +1402,11 @@ public class MainActivity extends Activity {
         if (pa) rl.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
         row.setLayoutParams(rl);
         // Posters end 150 + 240 = 390dp down; the pills sit 45dp above the bottom (540dp screen): 77dp gap.
-        ((ViewGroup.MarginLayoutParams) rowFrame.getLayoutParams()).topMargin = pa ? dp(77) : rowFrameTop;
+        // v24: those were fixed dp, so on a screen under 540dp tall (a TV with a higher density or a smaller
+        // display size) the Last used + ⋯ row fell below the bottom edge: focusable, but out of sight. Scale
+        // the vertical layout to the screen height instead.
+        posterScale = Math.min(1f, screenH / density / 540f);
+        ((ViewGroup.MarginLayoutParams) rowFrame.getLayoutParams()).topMargin = pa ? dps(77) : rowFrameTop;
         rowFrame.requestLayout();
         if (pa) {
             FrameLayout.LayoutParams l = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1411,7 +1418,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams d = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
             d.setMarginStart(dp(55));
-            d.topMargin = dp(150);
+            d.topMargin = dps(150);
             block.setLayoutParams(d);
         } else if (c) {
             FrameLayout.LayoutParams l = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1440,6 +1447,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams al = (LinearLayout.LayoutParams) analog.getLayoutParams();
         al.width = al.height = dp(c ? 210 : 164);
         analog.requestLayout();
+        fitDock();
     }
 
     /** The ⋯ menu: All apps, Add app, Inputs, Wi-Fi, Settings (long-press Settings or ⋯: launcher settings). */
@@ -1467,7 +1475,9 @@ public class MainActivity extends Activity {
             row.setText(labels[i]);
             row.setTextColor(text);
             Drawable ic = getDrawable(icons[i]).mutate();
-            ic.setBounds(0, 0, dp(i == 4 ? 29 : 18), dp(18));
+            // v24: every icon in the same 29dp-wide box (the Settings glyph is 1.6:1), so all labels line up.
+            if (i != 4) ic = new android.graphics.drawable.InsetDrawable(ic, dp(5), 0, dp(6), 0);
+            ic.setBounds(0, 0, dp(29), dp(18));
             row.setCompoundDrawables(ic, null, null, null);
             row.setCompoundDrawablePadding(dp(12));
             row.setCompoundDrawableTintList(text);
@@ -1543,6 +1553,35 @@ public class MainActivity extends Activity {
         boolean neutralExtreme = hsv[1] < 0.15f && (l < 0.15f || l > 0.85f);
         if (!neutralExtreme) return brand;
         return rowLum < ROW_DARK_BELOW ? 0xFFFFFFFF : 0xFF000000;
+    }
+
+    /**
+     * v24: a dock with more tiles than fit ran off the left edge (glass: over the analog clock, posters/floating:
+     * off screen). Cap the scroller to its area and let it clip; the 20dp padding (with matching negative
+     * margins) leaves room for the focus scale and ring, which used to rely on clipChildren=false.
+     */
+    private void fitDock() {
+        if (dock == null || analog == null) return;
+        HorizontalScrollView scroll = findViewById(R.id.dockScroll);
+        int style = cardStyle();
+        int avail = style == STYLE_GLASS ? screenW - dp(56) - dp(330)        // right of the 210dp clock + its text
+                : style == STYLE_POSTERS ? screenW - dp(55) - dp(55) : screenW - dp(72);
+        dock.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        // Posters widen 80 -> 280dp when focused.
+        int need = dock.getMeasuredWidth() + (style == STYLE_POSTERS ? dp(200) : 0);
+        boolean cap = need > avail;
+        int pad = cap ? dp(20) : 0, side = cap ? dp(32) : 0;   // sideways: room for the tilted poster's corner
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) scroll.getLayoutParams();
+        lp.width = cap ? avail + 2 * side : ViewGroup.LayoutParams.WRAP_CONTENT;
+        lp.setMargins(-side, -pad, -side, -pad);
+        scroll.setLayoutParams(lp);
+        scroll.setPadding(side, pad, side, pad);
+        // Last used ellipsizes before it can squeeze ⋯ out of the row (a narrow screen in glass).
+        lastWatched.setMaxWidth(Math.min(dp(320), avail - dp(60)));
+        // clipChildren on the parent is what clips the scroller to its own bounds (it was off for glow room;
+        // the padding above now gives that room).
+        ((ViewGroup) scroll.getParent()).setClipChildren(cap);
     }
 
     /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
@@ -1824,7 +1863,7 @@ public class MainActivity extends Activity {
     }
 
     private View posterTile(String label, String subtitle, Drawable icon, boolean glyph) {
-        final int narrow = dp(80), wide = dp(280), height = dp(240);   // v22: layout A sizes
+        final int narrow = dp(80), wide = dps(280), height = dps(240);   // v22: layout A sizes (v24: scaled to fit)
         PosterFrame tile = new PosterFrame(this, 11 * density);
         tile.setFocusable(true);
         tile.setClickable(true);
@@ -1930,6 +1969,8 @@ public class MainActivity extends Activity {
             a.addUpdateListener(an -> {
                 v.getLayoutParams().width = (int) an.getAnimatedValue();
                 v.requestLayout();
+                // v24: the scroller only saw the narrow card when focus arrived; keep the widening card in view.
+                if (focused) v.post(() -> keepInView(v));
             });
             a.start();
             vertical.animate().alpha(focused ? 0f : 0.85f).setDuration(120).start();
@@ -1942,6 +1983,24 @@ public class MainActivity extends Activity {
                     .scaleX(focused ? s15 : 1f).scaleY(focused ? s15 : 1f).setDuration(170).start();
         });
         return tile;
+    }
+
+    /** Scrolls the dock just enough that the whole of the (focused) tile v is inside its viewport. */
+    private void keepInView(View v) {
+        if (!(dock.getParent() instanceof HorizontalScrollView) || !v.hasFocus()) return;
+        HorizontalScrollView sc = (HorizontalScrollView) dock.getParent();
+        int view = sc.getWidth() - sc.getPaddingLeft() - sc.getPaddingRight();
+        int x = sc.getScrollX(), margin = dp(13);
+        int right = v.getRight() + margin, left = v.getLeft() - margin;
+        if (right > x + view) sc.scrollTo(right - view, 0);
+        else if (left < x) sc.scrollTo(Math.max(0, left), 0);
+    }
+
+    /** v24: poster layout sizes scale down with the screen height (1 on a 540dp-tall screen). */
+    private float posterScale = 1f;
+
+    private int dps(int value) {
+        return (int) (value * posterScale * density + 0.5f);
     }
 
     private int dp(int value) {

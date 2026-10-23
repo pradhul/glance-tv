@@ -38,3 +38,16 @@ android {
 }
 
 // No dependencies on purpose: framework widgets only, so the launcher starts fast and stays small.
+
+// v24: JVM UI tests (Robolectric) for D-pad focus/navigation. Test-only; the APK still has no dependencies.
+android.testOptions.unitTests.includeAndroidResources = true
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'androidx.test:core:1.6.1'
+}
+android.testOptions.unitTests.all { t ->
+    t.systemProperty 'onlyStyle', System.getProperty('onlyStyle', '')
+    t.systemProperty 'skipOnScreen', System.getProperty('skipOnScreen', 'false')
+    t.systemProperty 'shotsDir', System.getProperty('shotsDir', '/workspace/v24-shots/robolectric')
+}
