@@ -245,6 +245,9 @@ public class MainActivity extends Activity {
         LinearLayout lock = findViewById(R.id.lock);
         lock.addView(analog, 0, new LinearLayout.LayoutParams(dp(164), dp(164)));
         buildLayoutC();
+        buildV21(root);
+        takeDebugExtras(getIntent());
+        applyAutoStyle(false);
         updateClockStyle();
 
         // Bottom vignette behind the dock (transparent -> ~35% black) so tiles stand out on bright photos.
@@ -322,6 +325,13 @@ public class MainActivity extends Activity {
         ((TextView) findViewById(R.id.clock)).setTextColor(ink);
         ((TextView) findViewById(R.id.date)).setTextColor(ink);
         weatherView.setTextColor(ink);
+        if (slimLine != null) {
+            float ss = (topDark || night) ? 6 * density : 0;
+            for (TextView t : new TextView[]{slimClock, slimWeather}) {
+                t.setTextColor(ink);
+                t.setShadowLayer(ss, 0, ss > 0 ? density : 0, 0x66000000);
+            }
+        }
         if (netLine != null) {
             netLine.setTextColor(ink);
             netLine.setShadowLayer((topDark || night) ? 6 * density : 0, 0, density, 0x66000000);
@@ -405,8 +415,10 @@ public class MainActivity extends Activity {
         } catch (RuntimeException e) {
             // No live updates; the dock is still rebuilt on resume.
         }
+        applyAutoStyle(true);
         rebuildKeepingFocus();
         refresh();
+        updateRain();
         ticker.removeCallbacks(signalTick);
         ticker.postDelayed(signalTick, 10_000);
     }
@@ -415,6 +427,7 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        if (rain != null) rain.setRunning(false);
         ticker.removeCallbacks(weatherTick);
         ticker.removeCallbacks(autoJumpCheck);
         unregisterReceiver(minuteTick);
@@ -455,6 +468,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (takeWallpaperExtra(intent)) loadWallpaper();
+        takeDebugExtras(intent);
         // Home pressed while the launcher is already running: start over on the first app.
         focusFirstTile();
     }
@@ -898,6 +912,7 @@ public class MainActivity extends Activity {
         else if (hour < 22) greetingRes = R.string.good_evening;
         else greetingRes = R.string.good_night;
         greeting.setText(greetingRes);
+        if (applyAutoStyle(true)) rebuildKeepingFocus();   // crossed midnight with auto-switch on
         updateNetwork();
         if (nightHours() != wallpaperNight) {
             prefs().edit().remove(KEY_FORCED_WP).apply();   // a forced photo lasts until the next rotation
@@ -1160,11 +1175,16 @@ public class MainActivity extends Activity {
 
     /** Long-press on Settings: the launcher's own switches, plus the way to the system settings. */
     private void showLauncherSettings() {
-        String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night), getString(R.string.pref_simple_icons)};
-        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true), simpleIcons()};
+        String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night), getString(R.string.pref_simple_icons),
+                getString(R.string.pref_auto_style)};
+        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true), simpleIcons(), autoStyle()};
         AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(R.string.launcher_settings)
                 .setMultiChoiceItems(items, checked, (d, which, on) -> {
+                    if (which == 3) {
+                        setAutoStyle(on);
+                        return;
+                    }
                     prefs().edit().putBoolean(which == 0 ? KEY_AUTO_HDMI : which == 1 ? KEY_NIGHT : KEY_SIMPLE_ICONS, on).apply();
                     if (which == 2) {
                         buildDock();
@@ -1187,12 +1207,11 @@ public class MainActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(R.string.card_style)
                 .setSingleChoiceItems(names, cardStyle(), (d, which) -> {
-                    prefs().edit().putInt(KEY_CARD_STYLE, which).apply();
                     d.dismiss();
-                    updateClockStyle();
-                    buildDock();
-                    focusFirstTile();
+                    chooseStyle(which);
                 })
+                .setNeutralButton(getString(autoStyle() ? R.string.auto_style_on : R.string.auto_style_off),
+                        (d, w) -> setAutoStyle(!autoStyle()))
                 .create();
         dressDialog(dialog);
         dialog.show();
@@ -1209,6 +1228,8 @@ public class MainActivity extends Activity {
     // ---- v5: weather -----------------------------------------------------------------------------
 
     private void showWeather() {
+        updateSlim();
+        updateRain();
         if (weather == null) {
             weatherView.setVisibility(View.GONE);
             return;
@@ -1217,7 +1238,7 @@ public class MainActivity extends Activity {
         Drawable icon = getDrawable(weather.icon());
         weatherView.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(top != null ? top.ink : Color.WHITE));
-        weatherView.setVisibility(View.VISIBLE);
+        weatherView.setVisibility(cardStyle() == STYLE_FLOATING ? View.GONE : View.VISIBLE);
     }
 
     // ---- v5: last watched ------------------------------------------------------------------------
@@ -1484,9 +1505,135 @@ public class MainActivity extends Activity {
         applyLayout();
         boolean glass = cardStyle() == STYLE_GLASS;
         analog.setVisibility(glass ? View.VISIBLE : View.GONE);
-        findViewById(R.id.clock).setVisibility(glass ? View.GONE : View.VISIBLE);
+        boolean slim = cardStyle() == STYLE_FLOATING;
+        findViewById(R.id.clock).setVisibility(glass || slim ? View.GONE : View.VISIBLE);
+        // v21: Floating icons swap the clock block for one slim line.
+        greeting.setVisibility(slim ? View.GONE : View.VISIBLE);
+        findViewById(R.id.date).setVisibility(slim ? View.GONE : View.VISIBLE);
+        if (slimLine != null) slimLine.setVisibility(slim ? View.VISIBLE : View.GONE);
+        showWeather();
         ((LinearLayout.LayoutParams) greeting.getLayoutParams()).topMargin = glass ? dp(10) : 0;
         greeting.requestLayout();
+    }
+
+    // ---- v21: slim clock line, rain, poster tilt, daily auto-switch, debug extras -----------------
+
+    static final String EXTRA_FORCE_RAIN = "forceRain";
+    static final String EXTRA_STYLE = "style";
+    private static final String KEY_AUTO_STYLE = "auto_style";
+    private static final String KEY_AUTO_OFFSET = "auto_style_offset";
+    private LinearLayout slimLine;
+    private TextView slimClock, slimWeather;
+    private RainView rain;
+    private boolean forceRain;
+    private int lastPosterIndex = -1;
+
+    private void buildV21(FrameLayout root) {
+        LinearLayout lock = findViewById(R.id.lock);
+        slimLine = new LinearLayout(this);
+        slimLine.setOrientation(LinearLayout.HORIZONTAL);
+        slimLine.setGravity(Gravity.CENTER_VERTICAL);
+        android.widget.TextClock clock = new android.widget.TextClock(this);
+        clock.setFormat12Hour("h:mm  '|'  EEE d MMM");
+        clock.setFormat24Hour("HH:mm  '|'  EEE d MMM");
+        slimClock = clock;
+        slimWeather = new TextView(this);
+        for (TextView t : new TextView[]{slimClock, slimWeather}) {
+            t.setTextSize(22);
+            t.setSingleLine(true);
+            t.setIncludeFontPadding(false);
+            t.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+            t.setTextColor(top != null ? top.ink : Color.WHITE);
+            slimLine.addView(t);
+        }
+        slimLine.setVisibility(View.GONE);
+        lock.addView(slimLine, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // Rain sits over the wallpaper and scrims, under all chrome.
+        rain = new RainView(this);
+        rain.setVisibility(View.GONE);
+        root.addView(rain, root.indexOfChild(findViewById(R.id.scrimDock)) + 1,
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    /** "  ·  ☂ 21°" after the time and date, or nothing until the weather is known. */
+    private void updateSlim() {
+        if (slimWeather == null) return;
+        slimWeather.setText(weather == null ? "" : "  \u00B7  " + weather.symbol() + " " + weather.temp + "\u00B0");
+    }
+
+    /** Floating icons only: rain overlay while it rains (or forceRain), running only while we are resumed. */
+    private void updateRain() {
+        if (rain == null) return;
+        boolean wet = forceRain || (weather != null && Weather.rainy(weather.code));
+        boolean on = wet && cardStyle() == STYLE_FLOATING;
+        rain.setRaining(on);
+        rain.setRunning(on && resumed);
+    }
+
+    private boolean autoStyle() {
+        return prefs().getBoolean(KEY_AUTO_STYLE, false);
+    }
+
+    /** Local calendar days since 1970, so the rotation steps exactly at local midnight and across new year. */
+    private static int dayIndex() {
+        Calendar c = Calendar.getInstance();
+        long local = c.getTimeInMillis() + c.get(Calendar.ZONE_OFFSET) + c.get(Calendar.DST_OFFSET);
+        return (int) Math.floorDiv(local, 86_400_000L);
+    }
+
+    /** Glass -> Floating -> Posters, one step per day; the offset pins today's style to the chosen one. */
+    private int autoStyleToday() {
+        return Math.floorMod(dayIndex() + prefs().getInt(KEY_AUTO_OFFSET, 0), 3);
+    }
+
+    private void pinToday(int style) {
+        prefs().edit().putInt(KEY_AUTO_OFFSET, Math.floorMod(style - dayIndex(), 3)).apply();
+    }
+
+    private void setAutoStyle(boolean on) {
+        if (on) pinToday(cardStyle());   // switching on never changes today's look
+        prefs().edit().putBoolean(KEY_AUTO_STYLE, on).apply();
+        Toast.makeText(this, on ? R.string.auto_style_on : R.string.auto_style_off, Toast.LENGTH_SHORT).show();
+    }
+
+    /** With auto-switch on, applies today's style if it is not the current one. Returns whether it changed. */
+    private boolean applyAutoStyle(boolean rebuild) {
+        if (!autoStyle()) return false;
+        int today = autoStyleToday();
+        if (today == cardStyle()) return false;
+        prefs().edit().putInt(KEY_CARD_STYLE, today).apply();
+        if (rebuild) {
+            updateClockStyle();
+            buildDock();
+        }
+        return true;
+    }
+
+    /** A style picked by hand (menu or debug extra); with auto-switch on it becomes today's style. */
+    private void chooseStyle(int style) {
+        prefs().edit().putInt(KEY_CARD_STYLE, style).apply();
+        if (autoStyle()) pinToday(style);
+        lastPosterIndex = -1;
+        updateClockStyle();
+        buildDock();
+        focusFirstTile();
+    }
+
+    /** Debug: am start -n com.minimaltv.home/.MainActivity --ez forceRain true --es style glass|floating|posters */
+    private void takeDebugExtras(Intent intent) {
+        if (intent == null) return;
+        if (intent.hasExtra(EXTRA_FORCE_RAIN)) {
+            forceRain = intent.getBooleanExtra(EXTRA_FORCE_RAIN, false);
+            updateRain();
+        }
+        String st = intent.getStringExtra(EXTRA_STYLE);
+        if (st != null) {
+            st = st.trim().toLowerCase(Locale.ROOT);
+            int style = st.startsWith("glass") ? STYLE_GLASS : st.startsWith("float") ? STYLE_FLOATING
+                    : st.startsWith("poster") ? STYLE_POSTERS : -1;
+            if (style >= 0 && analog != null) chooseStyle(style);
+        }
     }
 
     private int cardStyle() {
@@ -1515,7 +1662,7 @@ public class MainActivity extends Activity {
         tile.setClickable(true);
         tile.setClipChildren(false);
         tile.setTag(R.id.label, label);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(150), dp(170));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(150), dp(192));
         lp.setMarginEnd(dp(24));
         tile.setLayoutParams(lp);
 
@@ -1529,9 +1676,30 @@ public class MainActivity extends Activity {
         image.setAlpha(0.82f);
         image.setElevation(dp(6));
         image.setOutlineProvider(null);
-        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(112), dp(70));
-        ip.topMargin = dp(40);
-        tile.addView(image, ip);
+        // v21: icon, a soft brand-colour halo behind it and a faint mirrored reflection under it, in one box
+        // tall enough that the reflection (which ends 40dp below the focused icon) never reaches the name.
+        FrameLayout box = new FrameLayout(this);
+        box.setClipChildren(false);
+        box.setClipToPadding(false);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(124));
+        bp.topMargin = dp(40);
+        tile.addView(box, bp);
+        int haloColour = brand != 0 ? focusColour(brand) : dockPair.ink;
+        GradientDrawable haloShape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{(haloColour & 0x00FFFFFF) | 0x59000000, (haloColour & 0x00FFFFFF) | 0x1F000000, haloColour & 0x00FFFFFF});
+        haloShape.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        haloShape.setGradientRadius(dp(105));
+        haloShape.setShape(GradientDrawable.OVAL);
+        View halo = new View(this);
+        halo.setBackground(haloShape);
+        halo.setAlpha(0f);
+        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(dp(230), dp(150), Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        hp.topMargin = dp(35) - dp(8) - dp(75);
+        box.addView(halo, hp);
+        ReflectionView reflection = new ReflectionView(this, image, dp(112) * 1.55f, dp(70) * 1.55f);
+        reflection.setAlpha(0f);
+        box.addView(reflection, new FrameLayout.LayoutParams(dp(180), dp(40), Gravity.CENTER_HORIZONTAL | Gravity.TOP));
+        box.addView(image, new FrameLayout.LayoutParams(dp(112), dp(70), Gravity.CENTER_HORIZONTAL | Gravity.TOP));
 
         TextView name = new TextView(this);
         name.setText(label);
@@ -1544,7 +1712,7 @@ public class MainActivity extends Activity {
         name.setAlpha(0f);
         name.setShadowLayer(8, 0, 2, 0x80000000);
         LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        np.topMargin = dp(22);
+        np.topMargin = dp(4);
         tile.addView(name, np);
 
         tile.setOnFocusChangeListener((v, focused) -> {
@@ -1562,6 +1730,7 @@ public class MainActivity extends Activity {
                     int cval = (int) an.getAnimatedValue();
                     shown.setTint(cval);
                     image.setTag(R.id.label, cval);
+                    reflection.invalidate();
                 });
                 image.setTag(ta);
                 ta.start();
@@ -1569,6 +1738,12 @@ public class MainActivity extends Activity {
             image.animate().scaleX(focused ? 1.55f : 1f).scaleY(focused ? 1.55f : 1f).alpha(focused ? 1f : 0.82f)
                     .translationY(focused ? -dp(8) : 0).setDuration(150).start();
             name.animate().alpha(focused ? 1f : 0f).setDuration(150).start();
+            // Reflection: starts 4dp under the focused picture's bottom edge (icon centre 35dp, lifted 8dp).
+            reflection.setTranslationY(dp(35) - dp(8) + reflection.pictureHeight() / 2f + dp(4));
+            reflection.invalidate();
+            reflection.animate().alpha(focused ? 1f : 0f).setDuration(focused ? 220 : 120).start();
+            halo.animate().alpha(focused ? 1f : 0f).scaleX(focused ? 1f : 0.7f).scaleY(focused ? 1f : 0.7f)
+                    .setDuration(focused ? 220 : 120).start();
             appName.setText("");
         });
         return tile;
@@ -1656,8 +1831,35 @@ public class MainActivity extends Activity {
         text.setAlpha(0f);
         tile.addView(text, tp);
 
+        // v21: a diagonal glare band that sweeps across the glass once on focus.
+        View glare = new View(this);
+        glare.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{0x00FFFFFF, 0x38FFFFFF, 0x00FFFFFF}));
+        glare.setRotation(20);
+        glare.setAlpha(0f);
+        FrameLayout.LayoutParams gp = new FrameLayout.LayoutParams(dp(70), (int) (height * 1.5f), Gravity.START | Gravity.TOP);
+        gp.topMargin = -(int) (height * 0.25f);
+        tile.addView(glare, gp);
+        tile.setCameraDistance(8000 * density);
+
         tile.setOnFocusChangeListener((v, focused) -> {
             appName.setText("");
+            // v21: tilt a few degrees toward the direction focus came from (parallax), flat when unfocused.
+            int idx = dock.indexOfChild(v);
+            if (focused) {
+                float dir = lastPosterIndex < 0 || idx >= lastPosterIndex ? 1f : -1f;
+                lastPosterIndex = idx;
+                v.animate().rotationY(4f * dir).rotationX(-1.5f).setDuration(220).start();
+                glare.animate().cancel();
+                glare.setTranslationX(-dp(110));
+                glare.setAlpha(1f);
+                glare.animate().translationX(wide + dp(30)).setStartDelay(90).setDuration(650)
+                        .withEndAction(() -> glare.setAlpha(0f)).start();
+            } else {
+                v.animate().rotationY(0f).rotationX(0f).setDuration(170).start();
+                glare.animate().cancel();
+                glare.setAlpha(0f);
+            }
             v.setForeground(focused ? ring : null);
             int from = v.getLayoutParams().width, to = focused ? wide : narrow;
             android.animation.ValueAnimator a = android.animation.ValueAnimator.ofInt(from, to);

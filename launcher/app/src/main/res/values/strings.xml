@@ -39,4 +39,7 @@
     </string-array>
     <string name="pref_simple_icons">Simple icons</string>
     <string name="more">More: all apps, add app, inputs, Wi-Fi, settings</string>
+    <string name="pref_auto_style">Auto-switch style daily</string>
+    <string name="auto_style_on">Auto-switch daily: on</string>
+    <string name="auto_style_off">Auto-switch daily: off</string>
 </resources>

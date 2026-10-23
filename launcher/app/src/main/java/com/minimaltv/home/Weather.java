@@ -63,6 +63,21 @@ final class Weather {
         return "Cloudy";
     }
 
+    /** Rain, drizzle, showers or thunderstorm. */
+    static boolean rainy(int code) {
+        return (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+    }
+
+    /** One plain symbol for the slim clock line. */
+    String symbol() {
+        if (code >= 95) return "\u26C8";
+        if (rainy(code)) return "\u2602";
+        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return "\u2744";
+        if (code == 45 || code == 48) return "\u2248";
+        if (code <= 1) return "\u2600";
+        return "\u2601";
+    }
+
     int icon() {
         if (code <= 1) return R.drawable.ic_w_sun;
         if (code == 45 || code == 48) return R.drawable.ic_w_fog;
