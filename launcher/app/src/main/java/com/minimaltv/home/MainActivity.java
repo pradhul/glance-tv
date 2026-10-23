@@ -244,6 +244,7 @@ public class MainActivity extends Activity {
         analog = new AnalogClockView(this);
         LinearLayout lock = findViewById(R.id.lock);
         lock.addView(analog, 0, new LinearLayout.LayoutParams(dp(164), dp(164)));
+        buildLayoutC();
         updateClockStyle();
 
         // Bottom vignette behind the dock (transparent -> ~35% black) so tiles stand out on bright photos.
@@ -321,6 +322,10 @@ public class MainActivity extends Activity {
         ((TextView) findViewById(R.id.clock)).setTextColor(ink);
         ((TextView) findViewById(R.id.date)).setTextColor(ink);
         weatherView.setTextColor(ink);
+        if (netLine != null) {
+            netLine.setTextColor(ink);
+            netLine.setShadowLayer((topDark || night) ? 6 * density : 0, 0, density, 0x66000000);
+        }
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(ink));
 
         for (int id : new int[]{R.id.btnInputs, R.id.btnNetwork, R.id.btnSettings}) {
@@ -329,6 +334,7 @@ public class MainActivity extends Activity {
         dressPill(findViewById(R.id.btnAdd), dockPair);
         dressPill(findViewById(R.id.btnAllApps), dockPair);
         dressPill(lastWatched, dockPair);
+        if (morePill != null) dressPill(morePill, dockPair);
         showLastWatched();
         appName.setTextColor(dockPair.ink);
         drawStatus();
@@ -430,6 +436,7 @@ public class MainActivity extends Activity {
             }
         }
         if (inputsPopup != null) inputsPopup.dismiss();
+        if (morePopup != null) morePopup.dismiss();
         if (removeDialog != null) removeDialog.dismiss();
     }
 
@@ -631,6 +638,13 @@ public class MainActivity extends Activity {
 
     private View newTile() {
         View tile = getLayoutInflater().inflate(R.layout.tile, dock, false);
+        if (cardStyle() == STYLE_GLASS) {
+            // Layout C: square glass tiles.
+            ViewGroup.MarginLayoutParams tl = (ViewGroup.MarginLayoutParams) tile.getLayoutParams();
+            tl.width = dp(GLASS_SQ);
+            tl.height = dp(GLASS_SQ);
+            tl.setMarginEnd(dp(16));
+        }
         ImageView image = tile.findViewById(R.id.image);
         image.setOutlineProvider(ROUNDED);
         image.setClipToOutline(true);
@@ -678,7 +692,12 @@ public class MainActivity extends Activity {
         // App icons: greyscale (a flat ink tint would turn full-bleed icons into blank squares). Glyphs: ink.
         image.setImageDrawable(Apps.mono(this, icon));
         image.setImageTintList(glyph ? ColorStateList.valueOf(0xFFFFFFFF) : null);
-        image.setPadding(dp(61), dp(16), dp(61), dp(48));   // a 70x44dp icon box
+        if (cardStyle() == STYLE_GLASS) {
+            int side = (dp(GLASS_SQ) - dp(76)) / 2;
+            image.setPadding(side, dp(40), side, dp(GLASS_SQ - 40 - 48));   // 76x48dp icon box, name below
+        } else {
+            image.setPadding(dp(61), dp(16), dp(61), dp(48));   // a 70x44dp icon box
+        }
         TextView text = tile.findViewById(R.id.label);
         text.setText(label);
         text.setTextColor(0xFFFFFFFF);
@@ -1019,6 +1038,7 @@ public class MainActivity extends Activity {
             text = getString(R.string.with_vpn, text, vpn);
         }
         netStatus.setText(text);
+        if (netLine != null) netLine.setText(text);
         if (dockPair == null) return;
         netStatus.setTextColor(dockPair.ink);
         // Tinted one by one: the dot is green or grey, the signal bars take the ink.
@@ -1304,6 +1324,122 @@ public class MainActivity extends Activity {
 
     private AnalogClockView analog;
 
+    // ---- v20: layout C (Glass style only) ---------------------------------------------------------
+    private static final int GLASS_SQ = 150;   // square tile side, dp
+    private TextView netLine, morePill;
+    private FrameLayout.LayoutParams lockDefault, dockDefault;
+    private int lockGravityDefault;
+    private PopupWindow morePopup;
+
+    /** Creates the views layout C adds (Wi-Fi line under the weather, the ⋯ pill) and remembers the defaults. */
+    private void buildLayoutC() {
+        LinearLayout lock = findViewById(R.id.lock);
+        View block = findViewById(R.id.dockBlock);
+        lockDefault = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) lock.getLayoutParams());
+        dockDefault = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) block.getLayoutParams());
+        lockGravityDefault = lock.getGravity();
+
+        netLine = new TextView(this);
+        netLine.setTextSize(15);
+        netLine.setAlpha(0.8f);
+        netLine.setSingleLine(true);
+        netLine.setEllipsize(TextUtils.TruncateAt.END);
+        netLine.setText(netStatus.getText());
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nl.topMargin = dp(4);
+        lock.addView(netLine, nl);
+
+        ViewGroup row = (ViewGroup) lastWatched.getParent();
+        morePill = (TextView) getLayoutInflater().inflate(R.layout.more_pill, row, false);
+        row.addView(morePill, row.indexOfChild(lastWatched) + 1);
+        morePill.setOnClickListener(this::showMore);
+        morePill.setOnLongClickListener(v -> {
+            showLauncherSettings();
+            return true;
+        });
+    }
+
+    /** Glass = layout C: clock block left, square tiles right, Last used + ⋯ under them. Others: the classic layout. */
+    private void applyLayout() {
+        if (lockDefault == null) return;
+        boolean c = cardStyle() == STYLE_GLASS;
+        LinearLayout lock = findViewById(R.id.lock);
+        View block = findViewById(R.id.dockBlock);
+        if (c) {
+            FrameLayout.LayoutParams l = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.CENTER_VERTICAL);
+            l.setMarginStart(dp(60));
+            lock.setLayoutParams(l);
+            lock.setGravity(Gravity.START);
+            FrameLayout.LayoutParams d = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
+            d.setMarginEnd(dp(56));
+            d.topMargin = dp(40);
+            block.setLayoutParams(d);
+        } else {
+            lock.setLayoutParams(new FrameLayout.LayoutParams(lockDefault));
+            lock.setGravity(lockGravityDefault);
+            block.setLayoutParams(new FrameLayout.LayoutParams(dockDefault));
+        }
+        int classic = c ? View.GONE : View.VISIBLE;
+        findViewById(R.id.pills).setVisibility(classic);
+        findViewById(R.id.btnAllApps).setVisibility(classic);
+        findViewById(R.id.btnAdd).setVisibility(classic);
+        netStatus.setVisibility(classic);
+        appName.setVisibility(c ? View.GONE : View.VISIBLE);
+        netLine.setVisibility(c ? View.VISIBLE : View.GONE);
+        morePill.setVisibility(c ? View.VISIBLE : View.GONE);
+        LinearLayout.LayoutParams al = (LinearLayout.LayoutParams) analog.getLayoutParams();
+        al.width = al.height = dp(c ? 210 : 164);
+        analog.requestLayout();
+    }
+
+    /** The ⋯ menu: All apps, Add app, Inputs, Wi-Fi, Settings (long-press Settings or ⋯: launcher settings). */
+    private void showMore(View anchor) {
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        rows.setBackgroundResource(R.drawable.popup_bg);
+        rows.setPadding(dp(8), dp(8), dp(8), dp(8));
+        PopupWindow popup = new PopupWindow(rows, dp(240), ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popup.setOutsideTouchable(true);
+        popup.setAnimationStyle(0);
+        String[] labels = {getString(R.string.all_apps), getString(R.string.add_app), getString(R.string.inputs),
+                getString(R.string.wifi), getString(R.string.settings)};
+        int[] icons = {R.drawable.ic_apps_small, R.drawable.ic_add, R.drawable.ic_hdmi, R.drawable.ic_wifi, R.drawable.ic_app_settings};
+        Runnable[] actions = {
+                () -> startActivity(new Intent(this, AllAppsActivity.class)),
+                this::startPicker,
+                () -> showInputs(anchor),
+                () -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)),
+                () -> open(new Intent(Settings.ACTION_SETTINGS))};
+        ColorStateList text = getColorStateList(isNight() ? R.color.menu_row_text_night : R.color.menu_row_text);
+        for (int i = 0; i < labels.length; i++) {
+            TextView row = (TextView) getLayoutInflater().inflate(R.layout.input_row, rows, false);
+            row.setText(labels[i]);
+            row.setTextColor(text);
+            Drawable ic = getDrawable(icons[i]).mutate();
+            ic.setBounds(0, 0, dp(i == 4 ? 29 : 18), dp(18));
+            row.setCompoundDrawables(ic, null, null, null);
+            row.setCompoundDrawablePadding(dp(12));
+            row.setCompoundDrawableTintList(text);
+            Runnable action = actions[i];
+            row.setOnClickListener(v -> {
+                popup.dismiss();
+                action.run();
+            });
+            if (i == 4) row.setOnLongClickListener(v -> {
+                popup.dismiss();
+                showLauncherSettings();
+                return true;
+            });
+            rows.addView(row);
+        }
+        morePopup = popup;
+        popup.showAsDropDown(anchor, 0, dp(10), Gravity.END);
+        rows.getChildAt(0).requestFocus();
+    }
+
     /** Luminance (0-1) of the wallpaper behind the icon row; recomputed whenever the wallpaper changes. */
     private float rowLum = 0.5f;
     /** Background darker than this counts as dark (white glyph), otherwise light (black glyph). */
@@ -1345,6 +1481,7 @@ public class MainActivity extends Activity {
     /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
     private void updateClockStyle() {
         if (analog == null) return;
+        applyLayout();
         boolean glass = cardStyle() == STYLE_GLASS;
         analog.setVisibility(glass ? View.VISIBLE : View.GONE);
         findViewById(R.id.clock).setVisibility(glass ? View.GONE : View.VISIBLE);

@@ -38,4 +38,5 @@
         <item>Tall posters</item>
     </string-array>
     <string name="pref_simple_icons">Simple icons</string>
+    <string name="more">More: all apps, add app, inputs, Wi-Fi, settings</string>
 </resources>

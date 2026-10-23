@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layout C (Glass): one pill for All apps, Add app, Inputs, Wi-Fi and Settings. Long-press: launcher settings. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/Pill"
+    android:layout_marginStart="0dp"
+    android:minWidth="44dp"
+    android:text="···"
+    android:textSize="18sp"
+    android:contentDescription="@string/more"
+    android:visibility="gone" />
