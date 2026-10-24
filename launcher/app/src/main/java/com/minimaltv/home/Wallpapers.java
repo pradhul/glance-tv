@@ -25,7 +25,8 @@ final class Wallpapers {
         final boolean topDark;
         final boolean pillsDark;
         final boolean dockDark;
-        boolean night;        // in the night set (22:00-06:00)
+        boolean night;        // in a night set (22:00-06:00)
+        String weather = "";  // v25: "" for the normal sets, "cloudy" or "rain" for the weather sets
         float luminance;      // mean of the three regions, 0-1
 
         Theme(String file, boolean topDark, boolean pillsDark, boolean dockDark) {
@@ -63,12 +64,18 @@ final class Wallpapers {
      * shown last when there is a choice, and decodes it. Null when the assets are missing. Call off the main thread.
      */
     static Loaded pickAndLoad(Context context, boolean night, String forced) {
+        return pickAndLoad(context, night, "", forced);
+    }
+
+    /**
+     * v25: weather is "" (normal sets), "cloudy" or "rain": the matching day/night weather set when it has photos,
+     * else the normal set for that time of day.
+     */
+    static Loaded pickAndLoad(Context context, boolean night, String weather, String forced) {
         AssetManager assets = context.getAssets();
         Theme[] all = readThemes(assets);
         if (all.length == 0) return null;
-        java.util.List<Theme> set = new java.util.ArrayList<>();
-        for (Theme t : all) if (t.night == night) set.add(t);
-        if (set.isEmpty()) java.util.Collections.addAll(set, all);
+        java.util.List<Theme> set = pickSet(all, night, weather);
         if (set.size() > 1) for (int i = 0; i < set.size(); i++) if (set.get(i).file.equals(lastFile)) set.remove(i--);
         Theme theme = set.get(new Random().nextInt(set.size()));
         if (forced != null) for (Theme t : all) if (t.file.equals(forced)) theme = t;
@@ -81,7 +88,17 @@ final class Wallpapers {
         return new Loaded(theme, sharp, blurred);
     }
 
-    private static Theme[] readThemes(AssetManager assets) {
+    /** The candidates for a time of day and weather; never empty when all is not. */
+    static java.util.List<Theme> pickSet(Theme[] all, boolean night, String weather) {
+        java.util.List<Theme> set = new java.util.ArrayList<>();
+        String w = weather == null ? "" : weather;
+        for (Theme t : all) if (t.night == night && t.weather.equals(w)) set.add(t);
+        if (set.isEmpty()) for (Theme t : all) if (t.night == night && t.weather.isEmpty()) set.add(t);
+        if (set.isEmpty()) java.util.Collections.addAll(set, all);
+        return set;
+    }
+
+    static Theme[] readThemes(AssetManager assets) {
         try (InputStream in = assets.open(DIR + "/themes.json")) {
             byte[] buf = new byte[in.available()];
             int n = in.read(buf);
@@ -95,7 +112,11 @@ final class Wallpapers {
                 boolean pillsDark = "dark".equals(o.optString("pills")) || (l != null && l.optDouble("pills", 1) < LIGHT_TEXT_BELOW);
                 themes[i] = new Theme(o.getString("file"), topDark, pillsDark,
                         "dark".equals(o.optString("dock")));
-                themes[i].night = "night".equals(o.optString("set"));
+                // Sets: day, night, cloudy-day, cloudy-night, rain-day, rain-night.
+                String set = o.optString("set");
+                themes[i].night = set.endsWith("night");
+                int dash = set.indexOf('-');
+                themes[i].weather = dash > 0 ? set.substring(0, dash) : "";
                 JSONObject lum = o.optJSONObject("luminance");
                 themes[i].luminance = lum == null ? 0.5f
                         : (float) (lum.optDouble("top", .5) + lum.optDouble("pills", .5) + lum.optDouble("dock", .5)) / 3f;

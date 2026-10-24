@@ -206,5 +206,96 @@
    "pills": 0.1,
    "dock": 0.23
   }
+ },
+ {
+  "file": "20.jpg",
+  "source": "https://unsplash.com/photos/cZsMqzp-sfE (rolling hills under a cloudy sky, Massimiliano Morosinotto, Unsplash License)",
+  "set": "cloudy-day",
+  "top": "light",
+  "pills": "light",
+  "dock": "light",
+  "luminance": {
+   "top": 0.79,
+   "pills": 0.77,
+   "dock": 0.55
+  }
+ },
+ {
+  "file": "21.jpg",
+  "source": "https://unsplash.com/photos/hAwYdqAMqU0 (rainy day at Cajas, Megs Homsher, Unsplash License)",
+  "set": "rain-day",
+  "top": "light",
+  "pills": "light",
+  "dock": "light",
+  "luminance": {
+   "top": 0.52,
+   "pills": 0.93,
+   "dock": 0.52
+  }
+ },
+ {
+  "file": "22.jpg",
+  "source": "https://unsplash.com/photos/3EjNubmcBwQ (rainy Connemara, Jan Brennenstuhl, Unsplash License)",
+  "set": "rain-day",
+  "top": "light",
+  "pills": "light",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.56,
+   "pills": 0.67,
+   "dock": 0.31
+  }
+ },
+ {
+  "file": "23.jpg",
+  "source": "https://unsplash.com/photos/jJ_CskRaG3g (moon through clouds, Aron Visuals, Unsplash License)",
+  "set": "cloudy-night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.24,
+   "pills": 0.08,
+   "dock": 0.25
+  }
+ },
+ {
+  "file": "24.jpg",
+  "source": "https://images.unsplash.com/photo-1616843412755-356b9f8b30b4 (black clouds at night, Unsplash License)",
+  "set": "cloudy-night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.13,
+   "pills": 0.11,
+   "dock": 0.13
+  }
+ },
+ {
+  "file": "25.jpg",
+  "source": "https://unsplash.com/photos/puGur-NPUJs (rainy Tokyo street at night, Red Shuheart, Unsplash License)",
+  "set": "rain-night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.17,
+   "pills": 0.11,
+   "dock": 0.37
+  }
+ },
+ {
+  "file": "26.jpg",
+  "source": "https://unsplash.com/photos/hQOct36DUSY (rainy night street, Red Shuheart, Unsplash License)",
+  "set": "rain-night",
+  "top": "dark",
+  "pills": "dark",
+  "dock": "dark",
+  "luminance": {
+   "top": 0.41,
+   "pills": 0.33,
+   "dock": 0.31
+  }
  }
 ]

@@ -4,6 +4,9 @@ import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
 import android.app.AlertDialog;
+import android.bluetooth.BluetoothClass;
+import android.bluetooth.BluetoothDevice;
+import android.widget.LinearLayout;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -79,6 +82,10 @@ public class DpadNavigationTest {
     public void installApps() {
         // A TV remote: never in touch mode, so focus is always drawn and requestFocus works.
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().setInTouchMode(false);
+        Weather.networkOff = true;   // v25: no live weather in tests; tests inject their own
+        Bt.resetForTest();
+        // Granted over adb on the TV; without it Robolectric records the runtime-permission request as a started activity.
+        shadowOf((android.app.Application) ApplicationProvider.getApplicationContext()).grantPermissions(android.Manifest.permission.BLUETOOTH_CONNECT);
         ShadowDialog.reset();
         Context c = ApplicationProvider.getApplicationContext();
         for (String p : PKGS) {
@@ -574,12 +581,19 @@ public class DpadNavigationTest {
     }
 
     @Test
-    public void rainOverlay_floatingOnly() {
+    public void rainOverlay_allStyles() {
+        // v25: the rain effect is no longer floating-only.
         launch("floating", new Intent().putExtra("forceRain", true));
         RainView rain = (RainView) field(activity, "rain");
         assertEquals(View.VISIBLE, rain.getVisibility());
         shot("floating-rain");
-        controller.newIntent(new Intent().putExtra("style", "glass"));
+        for (String s : new String[]{"glass", "posters"}) {
+            controller.newIntent(new Intent().putExtra("style", s));
+            settle();
+            assertEquals(s, View.VISIBLE, rain.getVisibility());
+            assertEquals(RainView.FX_RAIN, rain.mode());
+        }
+        controller.newIntent(new Intent().putExtra("forceRain", false));
         settle();
         assertNotEquals(View.VISIBLE, rain.getVisibility());
     }
@@ -606,5 +620,253 @@ public class DpadNavigationTest {
             assertSame(f, focused());
             tearDown();
         }
+    }
+
+    // ---- v25: Bluetooth icons, weather effects, forecast + AQI panel --------------------------
+
+    static final String FORECAST = "{\"current\":{\"time\":\"2026-10-24T05:15\",\"temperature_2m\":20.3,\"weather_code\":51,\"is_day\":0},"
+            + "\"hourly\":{\"time\":[\"2026-10-24T04:00\",\"2026-10-24T05:00\",\"2026-10-24T06:00\",\"2026-10-24T07:00\",\"2026-10-24T08:00\","
+            + "\"2026-10-24T09:00\",\"2026-10-24T10:00\",\"2026-10-24T11:00\"],"
+            + "\"temperature_2m\":[20.6,20.3,20.5,21.1,22.5,23.1,24.5,25.0],\"precipitation_probability\":[16,18,16,12,10,9,10,null],"
+            + "\"weather_code\":[3,51,51,51,3,51,51,2]}}";
+    static final String AQI = "{\"current\":{\"time\":\"2026-10-24T04:30\",\"us_aqi\":52,\"european_aqi\":25,\"pm2_5\":7.5}}";
+
+    Weather fake() {
+        return Weather.parse(FORECAST, AQI);
+    }
+
+    void withWeather(Weather w) {
+        activity.setWeatherForTest(w);
+        settle();
+        for (int k = 0; k < 50 && activity.wallpaperBusy; k++) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException ignored) {
+            }
+        }
+        settle();
+        // A weather-driven wallpaper change rebuilds the dock: start from the (new) first tile.
+        focusedStart = ((ViewGroup) field(activity, "dock")).getChildAt(0);
+        focusedStart.requestFocus();
+        settle();
+    }
+
+    LinearLayout panel() {
+        return (LinearLayout) field(activity, "forecastPanel");
+    }
+
+    // ---- parsing / pure logic -----------------------------------------------------------------
+
+    @Test
+    public void parse_nextSixHours_aqi_fx() {
+        Weather w = fake();
+        assertEquals(20, w.temp);
+        assertEquals("Light drizzle", w.word());
+        assertEquals("Light rain", Weather.word(61));
+        assertEquals("Overcast", Weather.word(3));
+        assertFalse(w.day);
+        assertEquals(6, w.hourLabel.length);
+        assertEquals("06:00", w.hourLabel[0]);   // the current (05:xx) and earlier hours are skipped
+        assertEquals("11:00", w.hourLabel[5]);
+        assertEquals(-1, w.hourRain[5]);         // null rain chance -> unknown
+        assertEquals(52, w.aqi());
+        assertEquals("Moderate", w.aqiLabel());
+        assertEquals(7.5, w.pm25, 0.001);
+        assertEquals(RainView.FX_RAIN, w.fx());
+        assertEquals(RainView.FX_MIST, Weather.fake(18, 45, true, 40, 5).fx());
+        assertEquals(RainView.FX_GLOW, Weather.fake(18, 0, false, 40, 5).fx());
+        assertEquals(RainView.FX_NONE, Weather.fake(18, 0, true, 40, 5).fx());
+        assertEquals(RainView.FX_NONE, Weather.fake(18, 3, false, 40, 5).fx());
+        assertEquals("Good", Weather.fake(18, 0, true, 30, 5).aqiLabel());
+        assertNull(Weather.parse("not json", null));
+        assertNull(Weather.parse(null, AQI));
+        Weather noAir = Weather.parse(FORECAST, "{bad");
+        assertNotNull(noAir);
+        assertEquals(-1, noAir.aqi());
+    }
+
+    @Test
+    public void bt_classify_events_lowBattery() {
+        assertEquals(Bt.KIND_REMOTE, Bt.kindOf(BluetoothClass.Device.Major.PERIPHERAL, 0x0500, "Amazon Fire TV Remote"));
+        assertEquals(Bt.KIND_REMOTE, Bt.kindOf(-1, -1, "Mi Remote"));
+        assertEquals(Bt.KIND_AUDIO, Bt.kindOf(BluetoothClass.Device.Major.AUDIO_VIDEO, BluetoothClass.Device.AUDIO_VIDEO_LOUDSPEAKER, "Speaker"));
+        assertEquals(-1, Bt.kindOf(BluetoothClass.Device.Major.PHONE, 0x0200, "Pixel"));
+        assertTrue(Bt.headphones(BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES, "x"));
+        assertFalse(Bt.headphones(BluetoothClass.Device.AUDIO_VIDEO_LOUDSPEAKER, "JBL Go"));
+        assertTrue(new Bt.State("a", "r", Bt.KIND_REMOTE, false, true, 19).low());
+        assertFalse(new Bt.State("a", "r", Bt.KIND_REMOTE, false, true, 20).low());
+        assertFalse(new Bt.State("a", "r", Bt.KIND_REMOTE, false, true, -1).low());
+        // Reflection on a method that does not exist fails gracefully.
+        assertNull(Bt.callInt(new Object(), "getBatteryLevel"));
+        Bt.onEvent(BluetoothDevice.ACTION_ACL_CONNECTED, "F3:4F:12:BF:58:8A", -1);
+        Bt.onEvent(Bt.ACTION_BATTERY_LEVEL_CHANGED, "F3:4F:12:BF:58:8A", 150);   // out of range: ignored
+        Bt.onEvent(BluetoothDevice.ACTION_ACL_DISCONNECTED, "F3:4F:12:BF:58:8A", -1);
+    }
+
+    @Test
+    public void btIcons_allStyles_stateDrawn_notFocusable() {
+        List<Bt.State> st = Arrays.asList(
+                new Bt.State("F3:4F:12:BF:58:8A", "Fire TV Remote", Bt.KIND_REMOTE, false, true, 15),
+                new Bt.State("00:00:00:00:A3:F3", "Speaker", Bt.KIND_AUDIO, false, false, -1));
+        for (String s : STYLES) {
+            launch(s, null);
+            View before = focused();
+            activity.showBtStates(st);
+            settle();
+            LinearLayout row = (LinearLayout) field(activity, "btRow");
+            assertTrue(s + ": BT row not shown", shown(row));
+            assertEquals(2, row.getChildCount());
+            BtIconView remote = (BtIconView) row.getChildAt(0), speaker = (BtIconView) row.getChildAt(1);
+            assertTrue(remote.showsBar());
+            assertTrue(s + ": low dot missing", remote.showsLowDot());
+            assertFalse(speaker.showsBar());
+            assertFalse(speaker.showsLowDot());
+            assertFalse(remote.isFocusable());
+            assertOnScreen(remote);
+            assertOnScreen(speaker);
+            assertSame(before, focused());
+            shot(s + "-bt-icons");
+            activity.showBtStates(new ArrayList<>());
+            settle();
+            assertEquals(View.GONE, row.getVisibility());
+            tearDown();
+        }
+    }
+
+    @Test
+    public void weatherFx_allStyles() {
+        for (String s : STYLES) {
+            launch(s, null);
+            RainView fx = (RainView) field(activity, "rain");
+            withWeather(Weather.fake(21, 61, true, 40, 5));
+            assertEquals(s, RainView.FX_RAIN, fx.mode());
+            assertEquals(View.VISIBLE, fx.getVisibility());
+            assertTrue(fx.isRunning());
+            withWeather(Weather.fake(18, 45, true, 40, 5));
+            assertEquals(RainView.FX_MIST, fx.mode());
+            assertTrue(fx.isRunning());
+            withWeather(Weather.fake(18, 0, false, 40, 5));
+            assertEquals(RainView.FX_GLOW, fx.mode());
+            assertFalse("glow is static", fx.isRunning());
+            shot(s + "-glow");
+            withWeather(Weather.fake(28, 0, true, 40, 5));
+            assertEquals(View.GONE, fx.getVisibility());
+            controller.pause();
+            withWeather(Weather.fake(21, 61, true, 40, 5));
+            assertFalse("no animation while paused", fx.isRunning());
+            controller.resume();
+            tearDown();
+        }
+    }
+
+    @Test
+    public void cachedWeather_shownWithoutNetwork() {
+        prefs().edit().putString("wx_forecast", FORECAST).putString("wx_aqi", AQI).putLong("wx_at", System.currentTimeMillis()).commit();
+        launch("glass", null);
+        TextView line = (TextView) activity.weatherLine();
+        assertTrue(shown(line));
+        assertTrue(line.getText().toString().contains("20\u00B0"));
+    }
+
+    @Test
+    public void forecast_dpadOpens_backCloses_navigationIntact_allStyles() {
+        for (String s : STYLES) {
+            launch(s, null);
+            withWeather(fake());
+            activity.showBtStates(Arrays.asList(new Bt.State("F3:4F:12:BF:58:8A", "Remote", Bt.KIND_REMOTE, false, true, 80)));
+            settle();
+            View line = activity.weatherLine();
+            assertTrue(s + ": weather line not shown", shown(line));
+            assertTrue(((TextView) line).getText().toString().contains("20\u00B0 Light drizzle"));
+            assertNotNull("line icon", ((TextView) line).getCompoundDrawablesRelative()[0]);
+            assertFalse(activity.forecastShowing());
+            assertNotNull(s + ": initial focus should stay on the first tile", focusedStart.getTag(R.id.label));
+
+            // Every focusable (tiles, pills, ⋯, the weather line) is still reachable by D-pad.
+            List<View> all = new ArrayList<>();
+            collect(activity.getWindow().getDecorView(), all);
+            assertTrue(s + ": weather line not focusable", all.contains(line));
+            for (View v : all) {
+                List<Integer> p = pathTo(v);
+                assertNotNull(s + ": " + describe(v) + " not reachable by D-pad", p);
+            }
+
+            // Focus opens it, on screen, with six hours and the AQI.
+            goTo(line);
+            assertTrue(s + ": focus did not open the forecast", activity.forecastShowing());
+            settle();
+            LinearLayout hours = (LinearLayout) field(activity, "forecastHours");
+            assertEquals(6, hours.getChildCount());
+            TextView aqi = (TextView) field(activity, "forecastAqi");
+            assertTrue(aqi.getText().toString().contains("AQI 52"));
+            assertTrue(aqi.getText().toString().contains("PM2.5 7.5"));
+            assertOnScreen(panel());
+            assertFalse(panel().isFocusable());
+            shot(s + "-forecast");
+
+            // Back closes it and keeps focus; Back again does nothing (home screen).
+            press(KeyEvent.KEYCODE_BACK);
+            assertFalse(s + ": Back did not close the forecast", activity.forecastShowing());
+            assertSame(line, focused());
+            assertFalse(activity.isFinishing());
+            // OK toggles it.
+            press(KeyEvent.KEYCODE_DPAD_CENTER);
+            assertTrue(s + ": OK did not open the forecast", activity.forecastShowing());
+            press(KeyEvent.KEYCODE_DPAD_CENTER);
+            assertFalse(activity.forecastShowing());
+            press(KeyEvent.KEYCODE_DPAD_CENTER);
+            assertTrue(activity.forecastShowing());
+
+            // Moving away closes it, and the first tile is reachable from the line.
+            View first = focusedStart;
+            focusedStart = line;
+            List<Integer> back = pathTo(first);
+            assertNotNull(s + ": first tile not reachable from the weather line", back);
+            replay(back);
+            assertSame(first, focused());
+            assertFalse(s + ": panel stayed open after focus left", activity.forecastShowing());
+            tearDown();
+        }
+    }
+
+    @Test
+    public void openForecastExtra() {
+        launch("posters", null);
+        withWeather(fake());
+        controller.newIntent(new Intent().putExtra("openForecast", true));
+        settle();
+        assertTrue(activity.forecastShowing());
+        Rect r = new Rect();
+        assertTrue(panel().getGlobalVisibleRect(r));
+    }
+
+    @Test
+    public void wallpaper_followsWeather() {
+        Wallpapers.Theme[] all = Wallpapers.readThemes(ApplicationProvider.getApplicationContext().getAssets());
+        for (boolean night : new boolean[]{false, true}) {
+            for (String sky : new String[]{"", "cloudy", "rain"}) {
+                List<Wallpapers.Theme> set = Wallpapers.pickSet(all, night, sky);
+                assertFalse(sky + night + ": empty set", set.isEmpty());
+                for (Wallpapers.Theme t : set) {
+                    assertEquals(t.file, night, t.night);
+                    assertEquals(t.file + " in the wrong set", sky, t.weather);
+                }
+            }
+        }
+        assertEquals("rain", Weather.wallpaperSet(51));   // drizzle
+        assertEquals("rain", Weather.wallpaperSet(63));
+        assertEquals("rain", Weather.wallpaperSet(95));
+        assertEquals("cloudy", Weather.wallpaperSet(3));  // overcast
+        assertEquals("", Weather.wallpaperSet(2));
+        assertEquals("", Weather.wallpaperSet(0));
+        assertEquals("", Weather.wallpaperSet(45));       // fog: normal set + mist
+
+        launch("glass", null);
+        withWeather(Weather.fake(21, 61, true, 40, 5));
+        assertEquals("rain", field(activity, "wallpaperWeather"));
+        withWeather(Weather.fake(21, 3, true, 40, 5));
+        assertEquals("cloudy", field(activity, "wallpaperWeather"));
+        withWeather(Weather.fake(28, 0, true, 40, 5));
+        assertEquals("", field(activity, "wallpaperWeather"));
     }
 }

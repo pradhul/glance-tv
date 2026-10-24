@@ -56,7 +56,11 @@ You can switch styles from the **Card style…** button in the launcher settings
 ### Home screen extras
 
 - **Wallpapers:** separate day and night sets of real photos, chosen by the time of day (06:00–22:00 is day). Each photo has a pre-blurred copy that the frosted panels use.
-- **Weather:** the current temperature and conditions from [Open-Meteo](https://open-meteo.com), which needs no API key. It refreshes every 30 minutes.
+- **Weather wallpapers (v25):** overcast skies switch to a cloudy set, rain or drizzle to a rainy set, each with day and night photos (Unsplash, Unsplash License; sources in `themes.json`). Other weather uses the normal sets. Checked with every weather refresh.
+- **Weather:** the current temperature and conditions from [Open-Meteo](https://open-meteo.com), which needs no API key. It refreshes every 30 minutes and the last answer is cached, so a restart shows it at once.
+- **Forecast + air quality (v25):** the weather line beside the clock can be focused with the remote; focus or OK opens a panel with the next 6 hours (temperature, rain chance) and the current US AQI with PM2.5 and a colour label (Open-Meteo air-quality API). Back closes it.
+- **Weather effects (v25, every style):** rain or drizzle shows the rain overlay, fog a slow mist, a clear night a soft static glow. All are cheap: no bitmaps, ≤30 fps rain, 8 fps mist, a glow that never animates.
+- **Bluetooth devices (v25):** line icons by the clock for a connected remote and a speaker/headphones. Connected is full ink, disconnected dimmed, never-connected-this-session hidden. A thin battery bar shows when the level is known, and an amber dot marks a remote under 20%. Needs `adb shell pm grant com.minimaltv.home android.permission.BLUETOOTH_CONNECT`.
 - **Last used pill:** opens the app you last played something in, showing the title when one is known. It is hidden while an HDMI tile is shown.
 - **Wi-Fi:** the full network name with signal bars. HDMI devices show up as tiles named after the device (for example "Nintendo Switch"), and the launcher remembers the name for each port.
 
@@ -65,7 +69,9 @@ You can switch styles from the **Card style…** button in the launcher settings
 ```bash
 adb shell am start -n com.minimaltv.home/.MainActivity --es wallpaper 16        # force a photo (until the next day/night switch)
 adb shell am start -n com.minimaltv.home/.MainActivity --es style glass         # or floating | posters
-adb shell am start -n com.minimaltv.home/.MainActivity --ez forceRain true      # rain overlay (Floating icons), not saved
+adb shell am start -n com.minimaltv.home/.MainActivity --ez forceRain true      # rain overlay, not saved
+adb shell am start -n com.minimaltv.home/.MainActivity --es forceFx mist        # rain | mist | glow | none, not saved
+adb shell am start -n com.minimaltv.home/.MainActivity --ez openForecast true   # open the forecast panel
 adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       # open the ⋯ menu
 ```
 
@@ -73,7 +79,7 @@ adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       
 
 ```bash
 adb connect <tv ip>:5555
-adb install -r minimal-tv-launcher-v23.apk
+adb install -r minimal-tv-launcher-v25.apk
 adb shell cmd package set-home-activity --user 0 com.minimaltv.home/.MainActivity
 ```
 

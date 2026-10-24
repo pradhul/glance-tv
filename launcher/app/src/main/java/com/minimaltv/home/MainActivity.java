@@ -136,11 +136,22 @@ public class MainActivity extends Activity {
     private final Runnable weatherTick = new Runnable() {
         @Override
         public void run() {
-            Weather.fetch(w -> runOnUiThread(() -> {
-                if (w != null) weather = w;
-                showWeather();
-            }));
-            ticker.postDelayed(this, 30 * 60_000);
+            // v25: a cached answer younger than 30 minutes is used as is; otherwise fetch and cache the new one.
+            long age = System.currentTimeMillis() - prefs().getLong(KEY_WX_AT, 0);
+            long wait = WEATHER_EVERY_MS;
+            if (age >= 0 && age < WEATHER_EVERY_MS && weather != null) {
+                wait = WEATHER_EVERY_MS - age;
+            } else if (!Weather.networkOff) {
+                Weather.fetch((w, fc, aq) -> runOnUiThread(() -> {
+                    if (w != null) {
+                        weather = w;
+                        prefs().edit().putString(KEY_WX_FC, fc).putString(KEY_WX_AQ, aq)
+                                .putLong(KEY_WX_AT, System.currentTimeMillis()).apply();
+                    }
+                    showWeather();
+                }));
+            }
+            ticker.postDelayed(this, wait);
         }
     };
     private float density;
@@ -241,6 +252,9 @@ public class MainActivity extends Activity {
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         takeWallpaperExtra(getIntent());
+        // v25: the cached weather first, so a cold start picks the right (overcast / rain) wallpaper set at once.
+        Weather cached = Weather.parse(prefs().getString(KEY_WX_FC, null), prefs().getString(KEY_WX_AQ, null));
+        if (cached != null) weather = cached;
         loadWallpaper();
 
         analog = new AnalogClockView(this);
@@ -248,6 +262,7 @@ public class MainActivity extends Activity {
         lock.addView(analog, 0, new LinearLayout.LayoutParams(dp(164), dp(164)));
         buildLayoutC();
         buildV21(root);
+        buildV25(root);
         takeDebugExtras(getIntent());
         applyAutoStyle(false);
         updateClockStyle();
@@ -269,12 +284,23 @@ public class MainActivity extends Activity {
         return hour >= 22 || hour < 6;
     }
 
+    private String wallpaperWeather = "";
+    volatile boolean wallpaperBusy;   // tests wait for the decode thread
+
+    /** v25: the weather set the current answer calls for ("" until the weather is known). */
+    private String weatherWallpaperSet() {
+        return weather == null ? "" : weather.wallpaperSet();
+    }
+
     private void loadWallpaper() {
         final boolean night = nightHours();
         wallpaperNight = night;
+        final String sky = weatherWallpaperSet();
+        wallpaperWeather = sky;
         final String forced = prefs().getString(KEY_FORCED_WP, null);
+        wallpaperBusy = true;
         new Thread(() -> {
-            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, forced);
+            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, sky, forced);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 blurred = loaded.blurred;
@@ -282,9 +308,11 @@ public class MainActivity extends Activity {
                 rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
                 wallpaperView.setImageBitmap(loaded.sharp);
                 applyTheme(loaded.theme.topDark, loaded.theme.pillsDark, loaded.theme.dockDark);
-                buildDock();
+                // v25: the photo can now change mid-session (the weather turned): keep the focused tile focused.
+                rebuildKeepingFocus();
                 if (getCurrentFocus() == null) focusFirstTile();
             });
+            wallpaperBusy = false;
         }).start();
     }
 
@@ -339,6 +367,7 @@ public class MainActivity extends Activity {
             netLine.setShadowLayer((topDark || night) ? 6 * density : 0, 0, density, 0x66000000);
         }
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(ink));
+        refreshBt();
 
         for (int id : new int[]{R.id.btnInputs, R.id.btnNetwork, R.id.btnSettings}) {
             dressPill(findViewById(id), pills);
@@ -421,6 +450,8 @@ public class MainActivity extends Activity {
         rebuildKeepingFocus();
         refresh();
         updateRain();
+        bt.start();
+        refreshBt();
         ticker.removeCallbacks(signalTick);
         ticker.postDelayed(signalTick, 10_000);
     }
@@ -430,6 +461,8 @@ public class MainActivity extends Activity {
         super.onPause();
         resumed = false;
         if (rain != null) rain.setRunning(false);
+        bt.stop();
+        hideForecast();
         ticker.removeCallbacks(weatherTick);
         ticker.removeCallbacks(autoJumpCheck);
         unregisterReceiver(minuteTick);
@@ -481,7 +514,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        // Home screen: Back goes nowhere.
+        // v25: Back closes the forecast panel; otherwise, on the home screen, Back goes nowhere.
+        if (forecastShowing()) hideForecast();
     }
 
     // ---- dock ------------------------------------------------------------------------------------
@@ -1231,17 +1265,25 @@ public class MainActivity extends Activity {
     // ---- v5: weather -----------------------------------------------------------------------------
 
     private void showWeather() {
+        // v25: the wallpaper follows the sky (overcast / rain sets), checked on every answer (30 min).
+        if (wallpaperView != null && !weatherWallpaperSet().equals(wallpaperWeather)
+                && prefs().getString(KEY_FORCED_WP, null) == null) {
+            loadWallpaper();
+        }
         updateSlim();
         updateRain();
         if (weather == null) {
             weatherView.setVisibility(View.GONE);
+            hideForecast();
             return;
         }
         weatherView.setText(weather.temp + "\u00B0 " + weather.word());
-        Drawable icon = getDrawable(weather.icon());
-        weatherView.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
+        Drawable icon = getDrawable(weather.lineIcon()).mutate();   // v25: line style, like the other icons
+        icon.setBounds(0, 0, dp(18), dp(18));
+        weatherView.setCompoundDrawablesRelative(icon, null, null, null);
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(top != null ? top.ink : Color.WHITE));
         weatherView.setVisibility(cardStyle() == STYLE_GLASS ? View.VISIBLE : View.GONE);
+        if (forecastShowing()) fillForecast();
     }
 
     // ---- v5: last watched ------------------------------------------------------------------------
@@ -1662,16 +1704,26 @@ public class MainActivity extends Activity {
     /** "  ·  ☂ 21°" after the time and date, or nothing until the weather is known. */
     private void updateSlim() {
         if (slimWeather == null) return;
-        slimWeather.setText(weather == null ? "" : "  \u00B7  " + weather.symbol() + " " + weather.temp + "\u00B0");
+        // v25: temperature and condition; focusable (D-pad) and opens the forecast panel.
+        slimWeather.setText(weather == null ? "" : weather.temp + "\u00B0 " + weather.word());
+        if (weather != null) {
+            Drawable icon = getDrawable(weather.lineIcon()).mutate();
+            int s = Math.round(slimWeather.getTextSize() * 1.05f);
+            icon.setBounds(0, 0, s, s);
+            icon.setTint(top != null ? top.ink : Color.WHITE);
+            slimWeather.setCompoundDrawablesRelative(icon, null, null, null);
+            slimWeather.setCompoundDrawablePadding(dp(7));
+        }
+        slimWeather.setVisibility(weather == null ? View.GONE : View.VISIBLE);
     }
 
     /** Floating icons only: rain overlay while it rains (or forceRain), running only while we are resumed. */
     private void updateRain() {
         if (rain == null) return;
-        boolean wet = forceRain || (weather != null && Weather.rainy(weather.code));
-        boolean on = wet && cardStyle() == STYLE_FLOATING;
-        rain.setRaining(on);
-        rain.setRunning(on && resumed);
+        // v25: every style; rain or drizzle -> rain, fog -> mist, a clear night -> a soft glow.
+        int fx = forceFx >= 0 ? forceFx : forceRain ? RainView.FX_RAIN : weather != null ? weather.fx() : RainView.FX_NONE;
+        rain.setMode(fx);
+        rain.setRunning(resumed);
     }
 
     private boolean autoStyle() {
@@ -1726,6 +1778,24 @@ public class MainActivity extends Activity {
     /** Debug: am start -n com.minimaltv.home/.MainActivity --ez forceRain true --es style glass|floating|posters */
     private void takeDebugExtras(Intent intent) {
         if (intent == null) return;
+        String fx = intent.getStringExtra(EXTRA_FORCE_FX);
+        if (fx != null) {
+            fx = fx.trim().toLowerCase(Locale.ROOT);
+            forceFx = fx.startsWith("rain") ? RainView.FX_RAIN : fx.startsWith("mist") || fx.startsWith("fog") ? RainView.FX_MIST
+                    : fx.startsWith("glow") ? RainView.FX_GLOW : fx.startsWith("none") || fx.startsWith("off") ? RainView.FX_NONE : -1;
+            updateRain();
+        }
+        if (intent.getBooleanExtra(EXTRA_OPEN_FORECAST, false)) {
+            intent.removeExtra(EXTRA_OPEN_FORECAST);
+            ticker.postDelayed(() -> {
+                View line = weatherLine();
+                if (!isFinishing() && line != null && line.isShown()) {
+                    lastKeyAt = SystemClock.uptimeMillis();
+                    line.requestFocus();
+                    showForecast();
+                }
+            }, 1500);
+        }
         if (intent.hasExtra(EXTRA_FORCE_RAIN)) {
             forceRain = intent.getBooleanExtra(EXTRA_FORCE_RAIN, false);
             updateRain();
@@ -2005,5 +2075,226 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) (value * density + 0.5f);
+    }
+
+    // ---- v25: Bluetooth icons, weather effects for every style, forecast + air quality panel ------------------
+
+    static final String EXTRA_FORCE_FX = "forceFx";
+    static final String EXTRA_OPEN_FORECAST = "openForecast";
+    private static final String KEY_WX_FC = "wx_forecast", KEY_WX_AQ = "wx_aqi", KEY_WX_AT = "wx_at";
+    private static final long WEATHER_EVERY_MS = 30 * 60_000L;
+    private static final int REQUEST_BT = 25;
+    private int forceFx = -1;
+    private Bt bt;
+    private LinearLayout btRow;
+    private LinearLayout forecastPanel, forecastHours;
+    private TextView forecastTitle, forecastAqi;
+
+    private void buildV25(FrameLayout root) {
+        bt = new Bt(this, () -> runOnUiThread(this::refreshBt));
+        btRow = new LinearLayout(this);
+        btRow.setOrientation(LinearLayout.HORIZONTAL);
+        btRow.setFocusable(false);
+        LinearLayout lock = findViewById(R.id.lock);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bl.topMargin = dp(8);
+        lock.addView(btRow, bl);
+        if (!bt.permitted()) {
+            try {
+                requestPermissions(new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BT);
+            } catch (RuntimeException ignored) {
+                // Granted over adb instead.
+            }
+        }
+
+        for (TextView line : new TextView[]{weatherView, slimWeather}) {
+            line.setFocusable(true);
+            line.setClickable(true);
+            line.setBackground(lineBackground());
+            line.setPadding(dp(8), dp(3), dp(8), dp(3));
+            line.setOnFocusChangeListener((v, has) -> {
+                // Only focus the user moved there opens it: not focus that lands on the line by itself at start-up.
+                if (has && SystemClock.uptimeMillis() - lastKeyAt < 1500) showForecast();
+                else if (has && lastKeyAt < 0) ticker.post(this::focusFirstTile);   // no key pressed yet: start-up
+                else hideForecast();
+            });
+            line.setOnClickListener(v -> {
+                if (forecastShowing()) hideForecast();
+                else showForecast();
+            });
+        }
+        ((LinearLayout.LayoutParams) slimWeather.getLayoutParams()).setMarginStart(dp(12));
+        ((LinearLayout.LayoutParams) weatherView.getLayoutParams()).setMarginStart(-dp(8));
+
+        forecastPanel = new LinearLayout(this);
+        forecastPanel.setOrientation(LinearLayout.VERTICAL);
+        forecastPanel.setBackgroundResource(R.drawable.popup_bg);
+        forecastPanel.setPadding(dp(16), dp(12), dp(16), dp(12));
+        forecastPanel.setFocusable(false);
+        forecastPanel.setVisibility(View.GONE);
+        forecastPanel.setElevation(dp(6));
+        forecastTitle = panelText(13, 0xB3FFFFFF);
+        forecastPanel.addView(forecastTitle);
+        forecastHours = new LinearLayout(this);
+        forecastHours.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hl.topMargin = dp(8);
+        forecastPanel.addView(forecastHours, hl);
+        forecastAqi = panelText(14, 0xFFFFFFFF);
+        forecastAqi.setCompoundDrawablePadding(dp(8));
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        al.topMargin = dp(10);
+        forecastPanel.addView(forecastAqi, al);
+        root.addView(forecastPanel, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START));
+    }
+
+    private android.graphics.drawable.StateListDrawable lineBackground() {
+        GradientDrawable on = new GradientDrawable();
+        on.setColor(0x40FFFFFF);
+        on.setStroke(Math.max(1, dp(1) / 2), 0x80FFFFFF);
+        on.setCornerRadius(dp(12));
+        android.graphics.drawable.StateListDrawable sl = new android.graphics.drawable.StateListDrawable();
+        sl.addState(new int[]{android.R.attr.state_focused}, on);
+        sl.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(0));
+        return sl;
+    }
+
+    private TextView panelText(int sp, int color) {
+        TextView t = new TextView(this);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        t.setSingleLine(true);
+        t.setIncludeFontPadding(false);
+        t.setFocusable(false);
+        return t;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQUEST_BT && bt != null) {
+            if (resumed) bt.start();
+            refreshBt();
+        }
+    }
+
+    private long lastKeyAt = -100_000;   // uptime of the last key; negative until the first one
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        lastKeyAt = SystemClock.uptimeMillis();
+        return super.dispatchKeyEvent(event);
+    }
+
+    /** The weather line of the current style: the glass one under the analog clock, or the slim line's. */
+    View weatherLine() {
+        if (weatherView == null) return null;
+        return cardStyle() == STYLE_GLASS ? weatherView : slimWeather;
+    }
+
+    boolean forecastShowing() {
+        return forecastPanel != null && forecastPanel.getVisibility() == View.VISIBLE;
+    }
+
+    void showForecast() {
+        if (forecastPanel == null || weather == null) return;
+        fillForecast();
+        forecastPanel.setVisibility(View.VISIBLE);
+        forecastPanel.bringToFront();
+        placeForecast();
+        // Placed again once both are laid out (the first show happens before the panel has a size).
+        forecastPanel.post(this::placeForecast);
+    }
+
+    void hideForecast() {
+        if (forecastPanel != null) forecastPanel.setVisibility(View.GONE);
+    }
+
+    /** Under the line; left-aligned to it, or right-aligned in the posters layout (its clock sits top right). */
+    private void placeForecast() {
+        View line = weatherLine();
+        if (line == null || !forecastShowing()) return;
+        View root = findViewById(R.id.root);
+        int[] lxy = new int[2], rxy = new int[2];
+        line.getLocationInWindow(lxy);
+        root.getLocationInWindow(rxy);
+        forecastPanel.measure(View.MeasureSpec.makeMeasureSpec(screenW, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(screenH, View.MeasureSpec.AT_MOST));
+        int pw = forecastPanel.getMeasuredWidth(), ph = forecastPanel.getMeasuredHeight();
+        int x = cardStyle() == STYLE_POSTERS ? lxy[0] - rxy[0] + line.getWidth() - pw : lxy[0] - rxy[0];
+        int y = lxy[1] - rxy[1] + line.getHeight() + dp(8);
+        if (y + ph > root.getHeight() - dp(12)) y = lxy[1] - rxy[1] - ph - dp(8);   // no room below: above it
+        x = Math.max(dp(12), Math.min(x, root.getWidth() - pw - dp(12)));
+        y = Math.max(dp(12), y);
+        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) forecastPanel.getLayoutParams();
+        if (l.leftMargin != x || l.topMargin != y) {
+            l.leftMargin = x;
+            l.topMargin = y;
+            forecastPanel.setLayoutParams(l);
+        }
+    }
+
+    void fillForecast() {
+        if (forecastPanel == null || weather == null) return;
+        Weather w = weather;
+        forecastTitle.setText(w.temp + "\u00B0  " + w.word() + "  \u00B7  next hours");
+        forecastHours.removeAllViews();
+        for (int i = 0; i < w.hourLabel.length; i++) {
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setGravity(Gravity.CENTER_HORIZONTAL);
+            TextView time = panelText(12, 0xB3FFFFFF), temp = panelText(17, 0xFFFFFFFF), rainP = panelText(12, 0xFF9CCBFF);
+            time.setText(w.hourLabel[i]);
+            temp.setText(Weather.symbol(w.hourCode[i]) + " " + w.hourTemp[i] + "\u00B0");
+            rainP.setText(w.hourRain[i] >= 0 ? "\u2602 " + w.hourRain[i] + "%" : "");
+            col.addView(time);
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tl.topMargin = dp(4);
+            col.addView(temp, tl);
+            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rl.topMargin = dp(3);
+            col.addView(rainP, rl);
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT);
+            forecastHours.addView(col, cl);
+        }
+        if (w.aqi() >= 0) {
+            GradientDrawable dot = new GradientDrawable();
+            dot.setShape(GradientDrawable.OVAL);
+            dot.setColor(w.aqiColor());
+            dot.setSize(dp(10), dp(10));
+            forecastAqi.setCompoundDrawablesWithIntrinsicBounds(dot, null, null, null);
+            String pm = Double.isNaN(w.pm25) ? "" : String.format(Locale.ROOT, "  \u00B7  PM2.5 %.1f \u00B5g/m\u00B3", w.pm25);
+            forecastAqi.setText("AQI " + w.aqi() + (w.usAqi >= 0 ? " (US)" : " (EU)") + "  " + w.aqiLabel() + pm);
+            forecastAqi.setVisibility(View.VISIBLE);
+        } else {
+            forecastAqi.setVisibility(View.GONE);
+        }
+    }
+
+    /** Test/debug hook: shows a given answer as if it had just arrived. */
+    void setWeatherForTest(Weather w) {
+        weather = w;
+        showWeather();
+    }
+
+    /** Test hook: draws the given device states instead of the adapter's. */
+    void showBtStates(List<Bt.State> states) {
+        if (btRow == null) return;
+        btRow.removeAllViews();
+        int ink = top != null ? top.ink : Color.WHITE;
+        for (Bt.State s : states) {
+            BtIconView v = new BtIconView(this);
+            v.bind(s, ink);
+            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (btRow.getChildCount() > 0) l.setMarginStart(dp(10));
+            btRow.addView(v, l);
+        }
+        btRow.setVisibility(states.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    void refreshBt() {
+        if (bt == null || btRow == null) return;
+        showBtStates(bt.states());
     }
 }
