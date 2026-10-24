@@ -18,8 +18,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * v36: upcoming shopping orders on the same top-left status line as the holiday text
- * ({@code Diwali · in 6 days  |  Flipkart · by Thu 29 Oct  |  Amazon · shipped}).
+ * v36: upcoming shopping orders on the same top-left status line as the holiday text.
+ * v37: each order shows its short item name and date instead of the store
+ * ({@code Diwali · in 6 days  |  [box] Air Mouse · Thu 29 Oct  |  Phone Case · shipped  [refresh]}).
  */
 final class Orders {
 
@@ -58,6 +59,12 @@ final class Orders {
     static final String KEY_URL = "orders_url";
     static final String DEFAULT_URL = "https://gist.githubusercontent.com/pradhul/fc391fa36ebf4170e54e2080a3f93866/raw/orders.json";
     static final String KEY_CACHE = "orders_json";
+    /** v37: optional endpoint POSTed before a manual refresh (e.g. a workflow_dispatch proxy). Empty = off. */
+    static final String KEY_REFRESH_URL = "orders_refresh_url";
+    static final long TRIGGER_WAIT_MS = 60_000L;
+    /** v37: placeholder the activity replaces with the box icon at the start of the orders section. */
+    static final String ICON_SLOT = "\uFFFC";
+    static final int MAX_LABEL = 18;
     static final String EXTRA_URL = "ordersUrl";
     static final String EXTRA_JSON = "ordersJson";
     static final long POLL_MS = 10 * 60_000L;
@@ -109,7 +116,7 @@ final class Orders {
                             }
                         }
                     }
-                    list.add(new Order(store, o.optString("item", ""), status, eta));
+                    list.add(new Order(store, o.isNull("item") ? "" : o.optString("item", ""), status, eta));
                 }
             }
             return new Snapshot(updated, list);
@@ -135,15 +142,38 @@ final class Orders {
         return out;
     }
 
+    /** v37: date first ({@code Today}, {@code Tomorrow}, {@code Thu 29 Oct}), then out-for-delivery, then the status word. */
     static String phrase(Order o, LocalDate today) {
-        if (o.outForDelivery()) return "today";
         if (o.eta != null) {
             long days = ChronoUnit.DAYS.between(today, o.eta);
-            if (days <= 0) return "today";
-            if (days == 1) return "tomorrow";
-            return "by " + ETA.format(o.eta);
+            if (days <= 0) return "Today";
+            if (days == 1) return "Tomorrow";
+            return ETA.format(o.eta);
         }
+        if (o.outForDelivery()) return "arriving today";
         return o.status.replace('_', ' ');
+    }
+
+    /** v37: the short item name (store if no item), cut at a word boundary with an ellipsis past {@link #MAX_LABEL}. */
+    static String label(Order o) {
+        String item = o.item == null ? "" : o.item.trim().replaceAll("\\s+", " ");
+        return item.isEmpty() ? o.store : shorten(item, MAX_LABEL);
+    }
+
+    static String shorten(String s, int max) {
+        if (s.length() <= max) return s;
+        int cut = s.lastIndexOf(' ', max);
+        String head = (cut > 0 ? s.substring(0, cut) : s.substring(0, max)).replaceAll("[\\s,.;:\\-–(]+$", "");
+        return head + "…";
+    }
+
+    /** v37: cache-busting copy of the orders URL for a manual refresh (raw gist URLs sit behind a CDN). */
+    static String bust(String url, long nowMs) {
+        return url + (url.contains("?") ? "&" : "?") + "t=" + nowMs;
+    }
+
+    static boolean post(String url) {
+        return HttpIo.post(url, 5000, 5000);
     }
 
     /** Null when there is nothing to show (stale, empty, or unavailable). */
@@ -156,7 +186,7 @@ final class Orders {
         for (int i = 0; i < n; i++) {
             if (i > 0) b.append("  |  ");
             Order o = vis.get(i);
-            b.append(o.store).append(" · ").append(phrase(o, today));
+            b.append(label(o)).append(" · ").append(phrase(o, today));
         }
         int extra = vis.size() - n;
         if (extra > 0) b.append("  |  +").append(extra);

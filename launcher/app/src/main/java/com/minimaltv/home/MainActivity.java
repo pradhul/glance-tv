@@ -2498,13 +2498,30 @@ public class MainActivity extends Activity {
         holidayLine.setFocusableInTouchMode(false);
         // Leave the Bing refresh button (24dp + 14dp end margin) plus a gap so a long
         // holiday+orders line ellipsizes instead of colliding with top-right chrome.
-        int statusMax = getResources().getDisplayMetrics().widthPixels - dp(18) - dp(24) - dp(14) - dp(16);
+        // v37: also leave room for the orders refresh button that follows the text on the same row.
+        int statusMax = getResources().getDisplayMetrics().widthPixels - dp(18) - dp(24) - dp(14) - dp(16)
+                - dp(20) - dp(4);
         holidayLine.setMaxWidth(Math.max(dp(80), statusMax));
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        statusRow.addView(holidayLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        ordersRefresh = new ImageView(this);
+        ordersRefresh.setImageResource(R.drawable.ic_refresh);
+        ordersRefresh.setContentDescription(getString(R.string.orders_refresh));
+        ordersRefresh.setPadding(dp(3), dp(3), dp(3), dp(3));
+        focusRing(ordersRefresh);
+        ordersRefresh.setOnClickListener(v -> refreshOrdersNow());
+        ordersRefresh.setVisibility(View.GONE);
+        LinearLayout.LayoutParams orl = new LinearLayout.LayoutParams(dp(20), dp(20));
+        orl.leftMargin = dp(4);
+        statusRow.addView(ordersRefresh, orl);
         FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
-        hl.topMargin = dp(10);
+        hl.topMargin = dp(8);
         hl.leftMargin = dp(18);
-        root.addView(holidayLine, root.getChildCount() - 1, hl);
+        root.addView(statusRow, root.getChildCount() - 1, hl);
 
         bingCredit = new TextView(this);
         bingCredit.setTextSize(8);
@@ -2522,18 +2539,8 @@ public class MainActivity extends Activity {
         bingRefresh = new ImageView(this);
         bingRefresh.setImageResource(R.drawable.ic_refresh);
         bingRefresh.setContentDescription(getString(R.string.bing_refresh));
-        bingRefresh.setFocusable(true);
         bingRefresh.setPadding(dp(4), dp(4), dp(4), dp(4));
-        bingRefresh.setAlpha(0.45f);
-        GradientDrawable ring = new GradientDrawable();
-        ring.setShape(GradientDrawable.OVAL);
-        ring.setColor(0x00000000);
-        bingRefresh.setBackground(ring);
-        bingRefresh.setOnFocusChangeListener((v, f) -> {
-            v.setAlpha(f ? 1f : 0.45f);
-            ring.setColor(f ? 0x33FFFFFF : 0x00000000);
-            v.animate().scaleX(f ? 1.15f : 1f).scaleY(f ? 1.15f : 1f).setDuration(120).start();
-        });
+        focusRing(bingRefresh);
         bingRefresh.setOnClickListener(v -> refreshBingNow());
         bingRefresh.setVisibility(bingOn() ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams rl = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.END);
@@ -2546,6 +2553,21 @@ public class MainActivity extends Activity {
         maybeRefreshHolidays();
     }
 
+    /** Focusable round icon button: dim at rest, bright with a soft ring and a little zoom when focused. */
+    private void focusRing(ImageView b) {
+        b.setFocusable(true);
+        b.setAlpha(0.45f);
+        GradientDrawable ring = new GradientDrawable();
+        ring.setShape(GradientDrawable.OVAL);
+        ring.setColor(0x00000000);
+        b.setBackground(ring);
+        b.setOnFocusChangeListener((v, f) -> {
+            v.setAlpha(f ? 1f : 0.45f);
+            ring.setColor(f ? 0x33FFFFFF : 0x00000000);
+            v.animate().scaleX(f ? 1.15f : 1f).scaleY(f ? 1.15f : 1f).setDuration(120).start();
+        });
+    }
+
     private void tintV30(int ink, boolean shadow) {
         if (holidayLine == null) return;
         float sr = shadow ? 5 * density : 0;
@@ -2555,6 +2577,8 @@ public class MainActivity extends Activity {
         }
         bingInk = ink;
         if (bingState == BING_IDLE) bingRefresh.setImageTintList(ColorStateList.valueOf(ink));
+        if (ordersState == BING_IDLE) ordersRefresh.setImageTintList(ColorStateList.valueOf(ink));
+        updateHolidayLine();   // re-tint the box icon
     }
 
     // v31: refresh button states: idle ↻, loading (spinning ↻), ok (green ✓ ~1.8 s), failed (red ✕ ~2 s).
@@ -2567,15 +2591,20 @@ public class MainActivity extends Activity {
     void setBingState(int state) {
         bingState = state;
         if (bingRefresh == null) return;
-        bingRefresh.removeCallbacks(bingBackToIdle);
-        setBingLoading(state == BING_LOADING);
+        showRefreshState(bingRefresh, state, bingBackToIdle);
+    }
+
+    /** v37: shared ↻ / spinning / ✓ / ✕ feedback for the Bing and orders refresh buttons. */
+    private void showRefreshState(ImageView b, int state, Runnable backToIdle) {
+        b.removeCallbacks(backToIdle);
+        spin(b, state == BING_LOADING);
         int icon = state == BING_OK ? R.drawable.ic_check : state == BING_FAILED ? R.drawable.ic_cross : R.drawable.ic_refresh;
         int tint = state == BING_OK ? 0xFF4CD964 : state == BING_FAILED ? 0xFFFF453A : bingInk;
-        bingRefresh.setImageResource(icon);
-        bingRefresh.setImageTintList(ColorStateList.valueOf(tint));
-        bingRefresh.setAlpha(state == BING_IDLE ? 0.45f : 1f);
-        if (state == BING_OK) bingRefresh.postDelayed(bingBackToIdle, 1800);
-        if (state == BING_FAILED) bingRefresh.postDelayed(bingBackToIdle, 2000);
+        b.setImageResource(icon);
+        b.setImageTintList(ColorStateList.valueOf(tint));
+        b.setAlpha(state == BING_IDLE && !b.isFocused() ? 0.45f : 1f);
+        if (state == BING_OK) b.postDelayed(backToIdle, 1800);
+        if (state == BING_FAILED) b.postDelayed(backToIdle, 2000);
     }
 
     private void showBingCredit(boolean fromBing) {
@@ -2635,20 +2664,19 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void setBingLoading(boolean on) {
-        if (bingRefresh == null) return;
-        bingRefresh.animate().cancel();
+    private void spin(ImageView b, boolean on) {
+        b.animate().cancel();
         if (on) {
             android.view.animation.RotateAnimation r = new android.view.animation.RotateAnimation(0, 360,
                     android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
             r.setDuration(900);
             r.setRepeatCount(android.view.animation.Animation.INFINITE);
             r.setInterpolator(new android.view.animation.LinearInterpolator());
-            bingRefresh.startAnimation(r);
+            b.startAnimation(r);
         } else {
-            bingRefresh.clearAnimation();
+            b.clearAnimation();
         }
-        bingRefresh.setEnabled(!on);
+        b.setEnabled(!on);
     }
 
     private void maybeRefreshHolidays() {
@@ -2676,9 +2704,27 @@ public class MainActivity extends Activity {
         if (ordersJson == null && !Orders.url(prefs().getString(Orders.KEY_URL, Orders.DEFAULT_URL)).isEmpty()) {
             ordersJson = Orders.cached(prefs());
         }
-        String text = Orders.join(holiday, Orders.line(Orders.parse(ordersJson)));
-        holidayLine.setText(text == null ? "" : text);
+        String orders = Orders.line(Orders.parse(ordersJson));
+        String text = Orders.join(holiday, orders == null ? null : Orders.ICON_SLOT + " " + orders);
+        holidayLine.setText(text == null ? "" : withBoxIcon(text));
         holidayLine.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
+        if (ordersRefresh != null) ordersRefresh.setVisibility(orders != null ? View.VISIBLE : View.GONE);
+    }
+
+    /** v37: swaps {@link Orders#ICON_SLOT} for a text-height line-style box drawn in the text colour. */
+    private CharSequence withBoxIcon(String text) {
+        int at = text.indexOf(Orders.ICON_SLOT);
+        if (at < 0) return text;
+        Drawable box = getDrawable(R.drawable.ic_package);
+        if (box == null) return text;
+        box = box.mutate();
+        box.setTint(holidayLine.getCurrentTextColor());
+        int size = Math.round(holidayLine.getTextSize());
+        box.setBounds(0, 0, size, size);
+        android.text.SpannableString sp = new android.text.SpannableString(text);
+        sp.setSpan(new android.text.style.ImageSpan(box, android.text.style.ImageSpan.ALIGN_BASELINE),
+                at, at + Orders.ICON_SLOT.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sp;
     }
 
     private void takeV30Extras(Intent intent) {
@@ -2706,6 +2752,50 @@ public class MainActivity extends Activity {
 
     private String ordersPreviewJson;
     private boolean ordersBusy;
+    ImageView ordersRefresh;
+    int ordersState = BING_IDLE;
+    private final Runnable ordersBackToIdle = () -> setOrdersState(BING_IDLE);
+
+    void setOrdersState(int state) {
+        ordersState = state;
+        if (ordersRefresh != null) showRefreshState(ordersRefresh, state, ordersBackToIdle);
+    }
+
+    /**
+     * v37: the orders refresh button. If {@code orders_refresh_url} is set, POST it first (e.g. to kick off the
+     * workflow that rewrites the gist), wait for it to land, then re-fetch the orders JSON past the CDN cache.
+     */
+    void refreshOrdersNow() {
+        String url = Orders.url(prefs().getString(Orders.KEY_URL, Orders.DEFAULT_URL));
+        if (url.isEmpty() || ordersBusy) return;
+        String trigger = Orders.url(prefs().getString(Orders.KEY_REFRESH_URL, ""));
+        ordersBusy = true;
+        setOrdersState(BING_LOADING);
+        if (UNDER_TEST) return;   // tests only check the button wiring; no network
+        final android.content.SharedPreferences p = prefs();
+        new Thread(() -> {
+            String body = null;
+            try {
+                if (!trigger.isEmpty()) {
+                    Orders.post(trigger);   // result ignored: the re-fetch below is what counts
+                    Thread.sleep(Orders.TRIGGER_WAIT_MS);
+                }
+                body = Orders.fetch(Orders.bust(url, System.currentTimeMillis()));
+            } catch (Throwable ignored) {
+            }
+            final String json = body;
+            runOnUiThread(() -> {
+                ordersBusy = false;
+                if (isFinishing() || isDestroyed()) return;
+                boolean ok = Orders.parse(json) != null;
+                if (ok) {
+                    Orders.saveCache(p, json);
+                    updateHolidayLine();
+                }
+                setOrdersState(ok ? BING_OK : BING_FAILED);
+            });
+        }).start();
+    }
     private final Runnable ordersTick = new Runnable() {
         @Override
         public void run() {

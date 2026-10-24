@@ -7,7 +7,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Small GET helper for Bing, Open-Meteo, Nager.Date, orders JSON and the VPN country lookup. Call off the main
+ * Small GET (and v37: fire-and-forget POST) helper for Bing, Open-Meteo, Nager.Date, orders JSON and the VPN country lookup. Call off the main
  * thread. Null on any failure (timeout, non-200, too large, parse later).
  */
 final class HttpIo {
@@ -52,6 +52,26 @@ final class HttpIo {
             return new String(b, "UTF-8");
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /** v37: empty-body POST; true on any 2xx. */
+    static boolean post(String url, int connectMs, int readMs) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setConnectTimeout(connectMs);
+            c.setReadTimeout(readMs);
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setFixedLengthStreamingMode(0);
+            c.getOutputStream().close();
+            int code = c.getResponseCode();
+            return code >= 200 && code < 300;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (c != null) c.disconnect();
         }
     }
 }

@@ -47,7 +47,7 @@ public class V36OrdersTest {
 
     static String order(String store, String status, String eta) {
         String e = eta == null ? "null" : "\"" + eta + "\"";
-        return "{\"store\":\"" + store + "\",\"item\":\"X\",\"status\":\"" + status + "\",\"eta\":" + e + "}";
+        return "{\"store\":\"" + store + "\",\"item\":\"\",\"status\":\"" + status + "\",\"eta\":" + e + "}";
     }
 
     @Before
@@ -80,10 +80,10 @@ public class V36OrdersTest {
 
     @Test
     public void format_etaAndStatusWords() {
-        assertEquals("by Thu 29 Oct", Orders.phrase(new Orders.Order("F", "x", "ordered", LocalDate.of(2026, 10, 29)), TODAY));
-        assertEquals("today", Orders.phrase(new Orders.Order("F", "x", "ordered", TODAY), TODAY));
-        assertEquals("tomorrow", Orders.phrase(new Orders.Order("F", "x", "shipped", TODAY.plusDays(1)), TODAY));
-        assertEquals("today", Orders.phrase(new Orders.Order("F", "x", "out_for_delivery", LocalDate.of(2026, 10, 30)), TODAY));
+        assertEquals("Thu 29 Oct", Orders.phrase(new Orders.Order("F", "x", "ordered", LocalDate.of(2026, 10, 29)), TODAY));
+        assertEquals("Today", Orders.phrase(new Orders.Order("F", "x", "ordered", TODAY), TODAY));
+        assertEquals("Tomorrow", Orders.phrase(new Orders.Order("F", "x", "shipped", TODAY.plusDays(1)), TODAY));
+        assertEquals("Fri 30 Oct", Orders.phrase(new Orders.Order("F", "x", "out_for_delivery", LocalDate.of(2026, 10, 30)), TODAY));
         assertEquals("shipped", Orders.phrase(new Orders.Order("A", "x", "shipped", null), TODAY));
         assertEquals("ordered", Orders.phrase(new Orders.Order("A", "x", "ordered", null), TODAY));
     }
@@ -96,7 +96,7 @@ public class V36OrdersTest {
                         + order("Amazon", "shipped", null) + ","
                         + order("Blinkit", "out_for_delivery", null) + ","
                         + order("Zepto", "ordered", "2026-11-01")));
-        assertEquals("Blinkit · today  |  Flipkart · by Thu 29 Oct  |  Zepto · by Sun 1 Nov  |  +2",
+        assertEquals("Blinkit · arriving today  |  Flipkart · Thu 29 Oct  |  Zepto · Sun 1 Nov  |  +2",
                 Orders.line(s, TODAY, NOW));
     }
 
@@ -106,15 +106,15 @@ public class V36OrdersTest {
                 order("Amazon", "shipped", null) + ","
                         + order("Amazon", "ordered", null) + ","
                         + order("Flipkart", "ordered", "2026-10-29")));
-        assertEquals("Flipkart · by Thu 29 Oct  |  Amazon · shipped  |  Amazon · ordered",
+        assertEquals("Flipkart · Thu 29 Oct  |  Amazon · shipped  |  Amazon · ordered",
                 Orders.line(s, TODAY, NOW));
     }
 
     @Test
     public void join_holidayThenOrders_orEitherAlone() {
-        assertEquals("Diwali · in 6 days  |  Flipkart · by Thu 29 Oct  |  Amazon · shipped",
-                Orders.join("Diwali · in 6 days", "Flipkart · by Thu 29 Oct  |  Amazon · shipped"));
-        assertEquals("Flipkart · by Thu 29 Oct", Orders.join(null, "Flipkart · by Thu 29 Oct"));
+        assertEquals("Diwali · in 6 days  |  Air Mouse · Thu 29 Oct  |  Amazon · shipped",
+                Orders.join("Diwali · in 6 days", "Air Mouse · Thu 29 Oct  |  Amazon · shipped"));
+        assertEquals("Air Mouse · Thu 29 Oct", Orders.join(null, "Air Mouse · Thu 29 Oct"));
         assertEquals("Diwali · in 6 days", Orders.join("Diwali · in 6 days", null));
         assertNull(Orders.join("", ""));
     }
@@ -157,9 +157,9 @@ public class V36OrdersTest {
                 order("Flipkart", "ordered", "2026-10-29") + ","
                         + order("Amazon", "shipped", null) + ","
                         + order("Amazon", "ordered", null));
-        String orders = "Flipkart · by Thu 29 Oct  |  Amazon · shipped  |  Amazon · ordered";
+        String orders = "Flipkart · Thu 29 Oct  |  Amazon · shipped  |  Amazon · ordered";
         String holiday = "Deepavali · in 6 days";
-        String combined = holiday + "  |  " + orders;
+        String combined = holiday + "  |  " + Orders.ICON_SLOT + " " + orders;
         for (String style : new String[]{"glass", "floating", "posters"}) {
             Intent extra = new Intent()
                     .putExtra(Orders.EXTRA_JSON, payload)
@@ -188,7 +188,7 @@ public class V36OrdersTest {
         MainActivity onlyOrders = launch("glass", new Intent()
                 .putExtra(Orders.EXTRA_JSON, payload)
                 .putExtra(MainActivity.EXTRA_HOLIDAY_TEXT, ""));
-        assertEquals(orders, onlyOrders.holidayLine.getText().toString());
+        assertEquals(Orders.ICON_SLOT + " " + orders, onlyOrders.holidayLine.getText().toString());
         assertEquals(View.VISIBLE, onlyOrders.holidayLine.getVisibility());
         onlyOrders.finish();
 
