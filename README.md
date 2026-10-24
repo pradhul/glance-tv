@@ -73,6 +73,10 @@ You can switch styles from the **Card style…** button in the launcher settings
 - **Holiday line** at the top-left: the next holiday and a countdown ("Deepavali · in 6 days", "· tomorrow", "Happy Deepavali" on the day). From a bundled list of national holidays and Karnataka festivals for 2026–2027 (`assets/holidays.json`) plus Nager.Date's India list, cached and refreshed weekly.
 - **Less blur:** the glass and floating background is now GaussianBlur(3) (was 6) and the posters background GaussianBlur(1.5) (was 2.5), for the bundled photos and the Bing photo alike; the frosted panels keep their heavy blur. The scrim behind the clock and the posters day dim are a little stronger to keep text readable.
 
+### v36: orders on the holiday line
+
+Upcoming shopping orders continue the same top-left line, same type (`Diwali · in 6 days  |  Flipkart · by Thu 29 Oct  |  Amazon · shipped`). If no holiday is showing, orders occupy that spot alone. The line ellipsizes so it never collides with the Bing refresh button. Hidden when the URL pref is empty, the payload is missing, or the snapshot is older than 24 hours. Polls every 10 minutes and on resume (background thread, last-good cache). Pref `orders_url`; skip `delivered` / `cancelled`; `out_for_delivery` sorts first and reads as `today`.
+
 ### Debug ADB extras
 
 ```bash
@@ -86,6 +90,8 @@ adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       
 adb shell am start -n com.minimaltv.home/.MainActivity --ez bingRefresh true    # fetch the next Bing pick now (one download)
 adb shell am start -n com.minimaltv.home/.MainActivity --es holidayDate 2026-11-07   # holiday line as on that day; "" ends it
 adb shell am start -n com.minimaltv.home/.MainActivity --es holidayText "Happy Diwali"  # show any text there; "" ends it
+adb shell am start -n com.minimaltv.home/.MainActivity --es ordersUrl https://example.com/orders.json
+adb shell am start -n com.minimaltv.home/.MainActivity --es ordersJson '{"updated":"2026-10-24T12:00:00+05:30","orders":[{"store":"Amazon","item":"X","status":"shipped","eta":null}]}'
 ```
 
 ### Install a build with ADB

@@ -7,7 +7,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Small GET helper for Bing, Open-Meteo, Nager.Date and the VPN country lookup. Call off the main
+ * Small GET helper for Bing, Open-Meteo, Nager.Date, orders JSON and the VPN country lookup. Call off the main
  * thread. Null on any failure (timeout, non-200, too large, parse later).
  */
 final class HttpIo {

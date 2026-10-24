@@ -480,6 +480,8 @@ public class MainActivity extends Activity {
         refreshBt();
         ticker.removeCallbacks(signalTick);
         ticker.postDelayed(signalTick, 10_000);
+        ticker.removeCallbacks(ordersTick);
+        ticker.post(ordersTick);
     }
 
     @Override
@@ -494,6 +496,7 @@ public class MainActivity extends Activity {
         unregisterReceiver(minuteTick);
         unregisterReceiver(wifiChange);
         ticker.removeCallbacks(signalTick);
+        ticker.removeCallbacks(ordersTick);
         if (networkCallbackRegistered) {
             networkCallbackRegistered = false;
             try {
@@ -1905,6 +1908,7 @@ public class MainActivity extends Activity {
             }, 800);
         }
         takeV30Extras(intent);
+        takeOrdersExtras(intent);
         String st = intent.getStringExtra(EXTRA_STYLE);
         if (st != null) {
             st = st.trim().toLowerCase(Locale.ROOT);
@@ -2488,7 +2492,14 @@ public class MainActivity extends Activity {
         holidayLine.setTextSize(11);
         holidayLine.setAlpha(0.75f);
         holidayLine.setSingleLine(true);
+        holidayLine.setEllipsize(TextUtils.TruncateAt.END);
         holidayLine.setLetterSpacing(0.02f);
+        holidayLine.setFocusable(false);
+        holidayLine.setFocusableInTouchMode(false);
+        // Leave the Bing refresh button (24dp + 14dp end margin) plus a gap so a long
+        // holiday+orders line ellipsizes instead of colliding with top-right chrome.
+        int statusMax = getResources().getDisplayMetrics().widthPixels - dp(18) - dp(24) - dp(14) - dp(16);
+        holidayLine.setMaxWidth(Math.max(dp(80), statusMax));
         FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
         hl.topMargin = dp(10);
@@ -2657,10 +2668,15 @@ public class MainActivity extends Activity {
 
     void updateHolidayLine() {
         if (holidayLine == null) return;
-        String text = holidayPreviewText;
-        if (text == null && holidays != null) {
-            text = Holidays.line(holidays, holidayPreviewDate != null ? holidayPreviewDate : java.time.LocalDate.now());
+        String holiday = holidayPreviewText;
+        if (holiday == null && holidays != null) {
+            holiday = Holidays.line(holidays, holidayPreviewDate != null ? holidayPreviewDate : java.time.LocalDate.now());
         }
+        String ordersJson = ordersPreviewJson;
+        if (ordersJson == null && !Orders.url(prefs().getString(Orders.KEY_URL, "")).isEmpty()) {
+            ordersJson = Orders.cached(prefs());
+        }
+        String text = Orders.join(holiday, Orders.line(Orders.parse(ordersJson)));
         holidayLine.setText(text == null ? "" : text);
         holidayLine.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
     }
@@ -2681,8 +2697,56 @@ public class MainActivity extends Activity {
         }
         if (intent.hasExtra(EXTRA_HOLIDAY_TEXT)) {
             String t = intent.getStringExtra(EXTRA_HOLIDAY_TEXT);
-            holidayPreviewText = t == null || t.isEmpty() ? null : t;
+            holidayPreviewText = t == null ? "" : t;
             updateHolidayLine();
         }
+    }
+
+    // ---- v36: shopping orders continue the same top-left line after the holiday text --------------
+
+    private String ordersPreviewJson;
+    private boolean ordersBusy;
+    private final Runnable ordersTick = new Runnable() {
+        @Override
+        public void run() {
+            maybeRefreshOrders();
+            ticker.postDelayed(this, Orders.POLL_MS);
+        }
+    };
+
+    private void takeOrdersExtras(Intent intent) {
+        if (intent.hasExtra(Orders.EXTRA_URL)) {
+            prefs().edit().putString(Orders.KEY_URL, Orders.url(intent.getStringExtra(Orders.EXTRA_URL))).apply();
+            intent.removeExtra(Orders.EXTRA_URL);
+        }
+        if (intent.hasExtra(Orders.EXTRA_JSON)) {
+            ordersPreviewJson = intent.getStringExtra(Orders.EXTRA_JSON);
+            if (Orders.parse(ordersPreviewJson) != null) Orders.saveCache(prefs(), ordersPreviewJson);
+            intent.removeExtra(Orders.EXTRA_JSON);
+            updateHolidayLine();
+        }
+    }
+
+    private void maybeRefreshOrders() {
+        String url = Orders.url(prefs().getString(Orders.KEY_URL, ""));
+        if (url.isEmpty() || ordersBusy || UNDER_TEST) return;
+        ordersBusy = true;
+        final android.content.SharedPreferences p = prefs();
+        new Thread(() -> {
+            String body = null;
+            try {
+                body = Orders.fetch(url);
+            } catch (Throwable ignored) {
+            }
+            final String json = body;
+            runOnUiThread(() -> {
+                ordersBusy = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (Orders.parse(json) != null) {
+                    Orders.saveCache(p, json);
+                    updateHolidayLine();
+                }
+            });
+        }).start();
     }
 }
