@@ -325,6 +325,7 @@ public class MainActivity extends Activity {
                 rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
                 wallpaperView.setImageBitmap(loaded.sharp);
                 wallpaperFile = loaded.theme.file;
+                prefs().edit().putString(KEY_WALLPAPER_FILE, wallpaperFile).apply();   // v33: All apps shows the same photo
                 wallpaperLight = light;
                 applyTheme(loaded.theme.topDark, loaded.theme.pillsDark, loaded.theme.dockDark);
                 // v25: the photo can now change mid-session (the weather turned): keep the focused tile focused.
@@ -2398,6 +2399,7 @@ public class MainActivity extends Activity {
 
     static final int POSTERS_DAY_DIM = 0x24000000;   // ~14% black, posters by day only (v30: a touch more for the sharper photo)
     String wallpaperFile;
+    static final String KEY_WALLPAPER_FILE = "wallpaper_file";
     boolean wallpaperLight;
 
     /** Style switched (menu, auto-switch or --es style): swap to the -light / -soft copy of the same photo, no relaunch. */

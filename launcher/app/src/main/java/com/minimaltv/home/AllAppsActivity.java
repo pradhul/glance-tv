@@ -42,6 +42,20 @@ public class AllAppsActivity extends Activity {
         if (pick) ((TextView) findViewById(R.id.title)).setText(R.string.add_to_home);
 
         grid = findViewById(R.id.grid);
+        loadWallpaper();
+        // v33: option C focus: a soft brand-colour glow behind the selected tile's icon.
+        grid.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                showGlow(position);
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+                showGlow(-1);
+            }
+        });
+        grid.setOnFocusChangeListener((v, has) -> showGlow(has ? grid.getSelectedItemPosition() : -1));
         grid.setOnItemClickListener((parent, view, position, id) -> {
             Apps.Entry entry = (Apps.Entry) parent.getItemAtPosition(position);
             if (pick) {
@@ -70,6 +84,55 @@ public class AllAppsActivity extends Activity {
                 grid.requestFocus();
             });
         }).start();
+    }
+
+    /** v33: the home screen's current photo (Bing or bundled), light blur, with home's 0x59000000 dim. */
+    private void loadWallpaper() {
+        final ImageView wp = findViewById(R.id.wallpaper);
+        final String file = getSharedPreferences("dock", MODE_PRIVATE).getString(MainActivity.KEY_WALLPAPER_FILE, null);
+        if (wp == null || file == null) return;   // never shown home yet: stay black
+        wp.setColorFilter(WALLPAPER_DIM, android.graphics.PorterDuff.Mode.SRC_ATOP);
+        new Thread(() -> {
+            final android.graphics.Bitmap b = Wallpapers.background(this, file, true);
+            runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed() && b != null) {
+                    wp.setImageBitmap(b);
+                    wallpaperShown = file;
+                }
+            });
+        }).start();
+    }
+
+    static final int WALLPAPER_DIM = 0x59000000;
+    String wallpaperShown;   // tests
+    int glowPosition = -1;   // tests
+
+    /** Glow drawable: radial brand colour fading to clear. */
+    static android.graphics.drawable.GradientDrawable glow(int color, float radiusPx) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{(color & 0x00FFFFFF) | 0x99000000, (color & 0x00FFFFFF) | 0x44000000, color & 0x00FFFFFF});
+        g.setGradientType(android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT);
+        g.setGradientRadius(radiusPx);
+        g.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        return g;
+    }
+
+    private void showGlow(int position) {
+        glowPosition = grid.hasFocus() || position < 0 ? position : -1;
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            View cell = grid.getChildAt(i);
+            View g = cell.findViewById(R.id.glow);
+            if (g == null) continue;
+            int pos = grid.getFirstVisiblePosition() + i;
+            if (pos == glowPosition && glowPosition >= 0) {
+                Apps.Entry e = (Apps.Entry) grid.getItemAtPosition(pos);
+                g.setBackground(glow(Glyphs.glowColor(e.pkg), g.getLayoutParams().width / 2f));
+                g.setVisibility(View.VISIBLE);
+            } else {
+                g.setVisibility(View.INVISIBLE);
+            }
+        }
     }
 
     @Override
@@ -133,7 +196,20 @@ public class AllAppsActivity extends Activity {
                     ? convertView
                     : getLayoutInflater().inflate(R.layout.item_app, parent, false);
             Apps.Entry entry = entries.get(position);
-            ((ImageView) cell.findViewById(R.id.icon)).setImageDrawable(Apps.mono(AllAppsActivity.this, entry.icon));
+            ImageView icon = cell.findViewById(R.id.icon);
+            if (Glyphs.has(entry.pkg)) {   // v33: Arcticons / Simple Icons glyph in white, like the home row
+                android.graphics.drawable.Drawable d = Glyphs.forApp(AllAppsActivity.this, entry.pkg, entry.label);
+                d.setTint(0xFFFFFFFF);
+                icon.setImageDrawable(d);
+            } else {
+                icon.setImageDrawable(Apps.mono(AllAppsActivity.this, entry.icon));
+            }
+            View g = cell.findViewById(R.id.glow);
+            if (g != null) {
+                boolean on = position == glowPosition;
+                if (on) g.setBackground(glow(Glyphs.glowColor(entry.pkg), g.getLayoutParams().width / 2f));
+                g.setVisibility(on ? View.VISIBLE : View.INVISIBLE);
+            }
             ((TextView) cell.findViewById(R.id.label)).setText(entry.label);
             return cell;
         }

@@ -32,6 +32,7 @@ final class Glyphs {
         BY_PACKAGE.put("org.smarttube.beta", R.drawable.ic_app_youtube);
         BY_PACKAGE.put("com.amazon.amazonvideo.livingroom", R.drawable.ic_app_arc_amazon_prime_video);
         BY_PACKAGE.put("com.apple.atve.androidtv.appletv", R.drawable.ic_app_arc_apple_tv);
+        BY_PACKAGE.put("com.mitv.gallery", R.drawable.ic_app_arc_gallery);
         BY_PACKAGE.put("com.graymatrix.did", R.drawable.ic_app_arc_zee5);
         BY_PACKAGE.put("in.startv.hotstar", R.drawable.ic_app_arc_jiohotstar);
         BY_PACKAGE.put("com.sonyliv", R.drawable.ic_app_arc_sony_liv);
@@ -43,11 +44,11 @@ final class Glyphs {
         BY_PACKAGE.put("com.plexapp.android", R.drawable.ic_app_plex);
         BY_PACKAGE.put("org.videolan.vlc", R.drawable.ic_app_vlc);
         BY_PACKAGE.put("org.xbmc.kodi", R.drawable.ic_app_kodi);
-        BY_PACKAGE.put("com.android.vending", R.drawable.ic_app_playstore);
+        BY_PACKAGE.put("com.android.vending", R.drawable.ic_app_arc_google_play_store);
         BY_PACKAGE.put("com.android.chrome", R.drawable.ic_app_chrome);
-        BY_PACKAGE.put("com.phlox.tvwebbrowser", R.drawable.ic_app_browser);
+        BY_PACKAGE.put("com.phlox.tvwebbrowser", R.drawable.ic_app_arc_browser);
         BY_PACKAGE.put("com.tcl.browser", R.drawable.ic_app_browser);
-        BY_PACKAGE.put("com.yablio.sendfilestotv", R.drawable.ic_app_send);
+        BY_PACKAGE.put("com.yablio.sendfilestotv", R.drawable.ic_app_arc_send_files_to_tv);
         BY_PACKAGE.put("com.android.tv.settings", R.drawable.ic_app_settings);
         BY_PACKAGE.put("com.android.settings", R.drawable.ic_app_settings);
     }
@@ -81,6 +82,18 @@ final class Glyphs {
     static int brandColor(String pkg) {
         Integer c = BRAND.get(pkg);
         return c != null ? c : 0xFFFFFFFF;
+    }
+
+    /** v33: true when the package has its own glyph (not the letter tile). */
+    static boolean has(String pkg) {
+        return pkg != null && BY_PACKAGE.containsKey(pkg);
+    }
+
+    /** v33: colour of the focus glow in All apps: the brand colour, white for apps without one or a too-dark one. */
+    static int glowColor(String pkg) {
+        int c = brandColor(pkg);
+        int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 40 ? 0xFFFFFFFF : c;
     }
 
     private Glyphs() {

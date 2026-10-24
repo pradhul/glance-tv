@@ -50,7 +50,7 @@ public class V32Test {
 
     @Test
     public void otherAppsKeepLetterTile() {
-        assertTrue(Glyphs.forApp(c, "com.mitv.gallery", "Gallery") instanceof Glyphs.Letter);
+        assertTrue(Glyphs.forApp(c, "com.mitv.livetv", "Live TV") instanceof Glyphs.Letter);
         assertTrue(Glyphs.forApp(c, "com.pradhul.remotehelper", "Remote") instanceof Glyphs.Letter);
     }
 

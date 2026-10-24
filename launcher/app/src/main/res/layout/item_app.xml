@@ -4,13 +4,28 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="14dp">
+    android:padding="14dp"
+    android:clipChildren="false">
 
-    <ImageView
-        android:id="@+id/icon"
+    <!-- v33: the soft focus glow (brand colour) sits behind the icon. -->
+    <FrameLayout
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:scaleType="fitCenter" />
+        android:clipChildren="false">
+
+        <View
+            android:id="@+id/glow"
+            android:layout_width="104dp"
+            android:layout_height="104dp"
+            android:layout_gravity="center"
+            android:visibility="invisible" />
+
+        <ImageView
+            android:id="@+id/icon"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/label"
@@ -22,5 +37,7 @@
         android:ellipsize="end"
         android:textColor="@color/text"
         android:textSize="13sp"
+        android:shadowColor="#99000000"
+        android:shadowRadius="5"
         android:fontFamily="sans-serif-medium" />
 </LinearLayout>
