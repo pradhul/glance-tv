@@ -2,7 +2,8 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@color/bg"
+    android:clipChildren="false">
 
     <!-- v33: the home screen's photo (light blur, 0x59000000 dim) behind the grid. -->
     <ImageView
@@ -15,7 +16,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:clipChildren="false">
 
         <TextView
             android:id="@+id/title"
@@ -49,6 +51,7 @@
             android:paddingBottom="28dp"
             android:scrollbars="none"
             android:overScrollMode="never"
+            android:clipChildren="false"
             android:focusable="true" />
     </LinearLayout>
 </FrameLayout>

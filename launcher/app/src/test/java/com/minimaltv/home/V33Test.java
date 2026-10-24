@@ -111,6 +111,7 @@ public class V33Test {
         AllAppsActivity a = open();
         assertEquals("26.jpg", a.wallpaperShown);
         ImageView wp = a.findViewById(R.id.wallpaper);
+        assertFalse("glow must not be clipped by the grid", ((android.view.ViewGroup) a.findViewById(R.id.grid)).getClipChildren());
         assertNotNull(wp.getDrawable());
         assertNotNull(wp.getColorFilter());
     }
@@ -132,14 +133,23 @@ public class V33Test {
         assertFalse(((ImageView) oCell.findViewById(R.id.icon)).getDrawable() instanceof VectorDrawable);
 
         g.requestFocus();
+        g.setSelection(other);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(AllAppsActivity.GLOW_IN_MS + 100));
         g.setSelection(netflix);
         shadowOf(Looper.getMainLooper()).idle();
         assertEquals(netflix, a.glowPosition);
+        View glow = g.getChildAt(netflix - g.getFirstVisiblePosition()).findViewById(R.id.glow);
+        assertTrue("slow fade-in", AllAppsActivity.GLOW_IN_MS >= 400 && AllAppsActivity.GLOW_OUT_MS >= 200);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(AllAppsActivity.GLOW_IN_MS + 100));
+        assertEquals(1f, glow.getAlpha(), 0.01f);
+        View cellView = g.getChildAt(netflix - g.getFirstVisiblePosition());
+        assertTrue("glow inside its cell vertically (never clipped)", glow.getTop() >= 0 && glow.getBottom() <= cellView.getHeight());
         assertEquals(View.VISIBLE, g.getChildAt(netflix - g.getFirstVisiblePosition()).findViewById(R.id.glow).getVisibility());
-        int next = netflix == 0 ? 1 : 0;
+        int next = other;
         a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, next > netflix ? KeyEvent.KEYCODE_DPAD_RIGHT : KeyEvent.KEYCODE_DPAD_LEFT));
         shadowOf(Looper.getMainLooper()).idle();
         assertEquals(next, a.glowPosition);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(AllAppsActivity.GLOW_OUT_MS + 100));
         assertEquals(View.INVISIBLE, g.getChildAt(netflix - g.getFirstVisiblePosition()).findViewById(R.id.glow).getVisibility());
     }
 }

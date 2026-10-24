@@ -118,6 +118,21 @@ public class AllAppsActivity extends Activity {
         return g;
     }
 
+    static final long GLOW_IN_MS = 450, GLOW_OUT_MS = 250;
+
+    /** v34: grow and fade the glow in slowly instead of popping on. */
+    private void fadeIn(View g, int pos, String pkg) {
+        g.setBackground(glow(Glyphs.glowColor(pkg), g.getLayoutParams().width / 2f));
+        g.setTag(pos);
+        g.animate().cancel();
+        g.setAlpha(0f);
+        g.setScaleX(0.5f);
+        g.setScaleY(0.5f);
+        g.setVisibility(View.VISIBLE);
+        g.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(GLOW_IN_MS)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).withEndAction(null).start();
+    }
+
     private void showGlow(int position) {
         glowPosition = grid.hasFocus() || position < 0 ? position : -1;
         for (int i = 0; i < grid.getChildCount(); i++) {
@@ -126,11 +141,16 @@ public class AllAppsActivity extends Activity {
             if (g == null) continue;
             int pos = grid.getFirstVisiblePosition() + i;
             if (pos == glowPosition && glowPosition >= 0) {
-                Apps.Entry e = (Apps.Entry) grid.getItemAtPosition(pos);
-                g.setBackground(glow(Glyphs.glowColor(e.pkg), g.getLayoutParams().width / 2f));
-                g.setVisibility(View.VISIBLE);
-            } else {
-                g.setVisibility(View.INVISIBLE);
+                if (Integer.valueOf(pos).equals(g.getTag())) continue;   // already glowing / fading in
+                fadeIn(g, pos, ((Apps.Entry) grid.getItemAtPosition(pos)).pkg);
+            } else if (g.getTag() != null) {
+                g.setTag(null);
+                g.animate().cancel();
+                g.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(GLOW_OUT_MS)
+                        .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                        .withEndAction(() -> {
+                            if (g.getTag() == null) g.setVisibility(View.INVISIBLE);
+                        }).start();
             }
         }
     }
@@ -207,8 +227,21 @@ public class AllAppsActivity extends Activity {
             View g = cell.findViewById(R.id.glow);
             if (g != null) {
                 boolean on = position == glowPosition;
-                if (on) g.setBackground(glow(Glyphs.glowColor(entry.pkg), g.getLayoutParams().width / 2f));
-                g.setVisibility(on ? View.VISIBLE : View.INVISIBLE);
+                boolean was = Integer.valueOf(position).equals(g.getTag());
+                boolean sameApp = Integer.valueOf(position).equals(cell.getTag());   // re-bound for the same app (layout pass)
+                cell.setTag(position);
+                if (on && !was) {
+                    fadeIn(g, position, entry.pkg);
+                } else if (!on && sameApp) {
+                    // leave it: a fade-out may be running
+                } else if (!on && g.getTag() != null) {   // recycled from another app: hide at once
+                    g.animate().cancel();
+                    g.setTag(null);
+                    g.setAlpha(0f);
+                    g.setVisibility(View.INVISIBLE);
+                } else if (!on) {
+                    g.setVisibility(View.INVISIBLE);
+                }
             }
             ((TextView) cell.findViewById(R.id.label)).setText(entry.label);
             return cell;

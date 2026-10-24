@@ -1,43 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:padding="14dp"
-    android:clipChildren="false">
+    android:layout_height="wrap_content">
 
-    <!-- v33: the soft focus glow (brand colour) sits behind the icon. -->
-    <FrameLayout
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:clipChildren="false">
+    <!-- v34: the focus glow (brand colour) lies fully inside the cell, centred on the icon, so nothing clips it:
+         top = paddingTop 22dp + half icon 32dp - half glow 52dp = 2dp. -->
+    <View
+        android:id="@+id/glow"
+        android:layout_width="104dp"
+        android:layout_height="104dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:visibility="invisible" />
 
-        <View
-            android:id="@+id/glow"
-            android:layout_width="104dp"
-            android:layout_height="104dp"
-            android:layout_gravity="center"
-            android:visibility="invisible" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="14dp">
 
         <ImageView
             android:id="@+id/icon"
             android:layout_width="64dp"
             android:layout_height="64dp"
             android:scaleType="fitCenter" />
-    </FrameLayout>
 
-    <TextView
-        android:id="@+id/label"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:gravity="center"
-        android:singleLine="true"
-        android:ellipsize="end"
-        android:textColor="@color/text"
-        android:textSize="13sp"
-        android:shadowColor="#99000000"
-        android:shadowRadius="5"
-        android:fontFamily="sans-serif-medium" />
-</LinearLayout>
+        <TextView
+            android:id="@+id/label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textColor="@color/text"
+            android:textSize="13sp"
+            android:shadowColor="#99000000"
+            android:shadowRadius="5"
+            android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+</FrameLayout>
