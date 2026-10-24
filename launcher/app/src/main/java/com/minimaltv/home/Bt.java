@@ -55,6 +55,42 @@ final class Bt {
         }
     }
 
+    // v28: colours by state. Muted enough for the blurred photos, readable on warm night ink too.
+    static final int GREEN = 0xFF7EDC9A, AMBER = 0xFFFFC24D, RED = 0xFFFF6B6B, GREY = 0xFF9A9A9A;
+
+    /** Icon, bar and % colour: green >= 50%, amber 20-49%, red < 20%; ink when the level is unknown; grey when off. */
+    static int color(State s, int ink) {
+        if (!s.connected) return GREY;
+        if (s.battery < 0) return ink;
+        if (s.battery < LOW_BATTERY) return RED;
+        if (s.battery < 50) return AMBER;
+        return GREEN;
+    }
+
+    /** A short label for under the icon: a known brand, else the first word cut to 8 characters. */
+    static String shortName(String name) {
+        if (name == null || name.trim().isEmpty()) return "BT";
+        String n = name.trim(), l = n.toLowerCase(java.util.Locale.ROOT);
+        if (l.equals("ar") || l.contains("fire") || l.contains("amazon")) return "Fire";
+        if (l.contains("xiaomi") || l.startsWith("mi ") || l.equals("mirc") || l.startsWith("redmi")) return "Mi";
+        if (l.startsWith("ht-") || l.contains("sony") || l.startsWith("srs-") || l.startsWith("wh-") || l.startsWith("wf-")) return "Sony";
+        if (l.contains("jbl")) return "JBL";
+        if (l.contains("bose")) return "Bose";
+        if (l.contains("airpods")) return "AirPods";
+        if (l.contains("galaxy buds")) return "Buds";
+        if (l.contains("boat")) return "boAt";
+        if (l.contains("google") || l.contains("chromecast")) return "Google";
+        String first = n.split("[\\s_\\-]+")[0];
+        if (first.isEmpty()) first = n;
+        return first.length() > 8 ? first.substring(0, 8) : first;
+    }
+
+    /** "Mi 61%" when connected with a known battery, else just the short name. */
+    static String label(State s) {
+        String b = s.connected && s.battery >= 0 ? " " + s.battery + "%" : "";
+        return shortName(s.name) + b;
+    }
+
     // Process-wide, so "seen connected this session" survives the activity being recreated.
     private static final Set<String> seenConnected = new HashSet<>();
     private static final Set<String> aclConnected = new HashSet<>();

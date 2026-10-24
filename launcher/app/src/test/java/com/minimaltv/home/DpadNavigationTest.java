@@ -1085,5 +1085,72 @@ public class DpadNavigationTest {
         assertEquals(PKGS.length, ((ViewGroup) activity.findViewById(R.id.dock)).getChildCount());
         assertEquals(saved, prefs().getString("apps", null));
     }
+
+    // ---- v28: Bluetooth colours and short names -------------------------------------------------------
+
+    @Test
+    public void bt_colourByState() {
+        int ink = 0xFFFFE2B8;   // warm night ink
+        assertEquals(Bt.GREEN, Bt.color(new Bt.State("a", "Xiaomi RC", Bt.KIND_REMOTE, false, true, 61), ink));
+        assertEquals(Bt.GREEN, Bt.color(new Bt.State("a", "x", Bt.KIND_REMOTE, false, true, 50), ink));
+        assertEquals(Bt.AMBER, Bt.color(new Bt.State("a", "AR", Bt.KIND_REMOTE, false, true, 36), ink));
+        assertEquals(Bt.AMBER, Bt.color(new Bt.State("a", "x", Bt.KIND_REMOTE, false, true, 20), ink));
+        assertEquals(Bt.RED, Bt.color(new Bt.State("a", "x", Bt.KIND_REMOTE, false, true, 19), ink));
+        assertEquals(ink, Bt.color(new Bt.State("a", "HT-S20R", Bt.KIND_AUDIO, false, true, -1), ink));
+        assertEquals(Bt.GREY, Bt.color(new Bt.State("a", "AR", Bt.KIND_REMOTE, false, false, 80), ink));
+    }
+
+    @Test
+    public void bt_shortNames() {
+        assertEquals("Fire", Bt.shortName("AR"));
+        assertEquals("Fire", Bt.shortName("Amazon Fire TV Remote"));
+        assertEquals("Mi", Bt.shortName("Xiaomi RC"));
+        assertEquals("Sony", Bt.shortName("HT-S20R"));
+        assertEquals("JBL", Bt.shortName("JBL Flip 5"));
+        assertEquals("Logitech", Bt.shortName("Logitech K380 Keyboard"));
+        assertEquals("Supercal", Bt.shortName("Supercalifragilistic Speaker"));
+        assertEquals("BT", Bt.shortName(null));
+        assertEquals("Mi 61%", Bt.label(new Bt.State("a", "Xiaomi RC", Bt.KIND_REMOTE, false, true, 61)));
+        assertEquals("Sony", Bt.label(new Bt.State("a", "HT-S20R", Bt.KIND_AUDIO, false, true, -1)));
+        assertEquals("Fire", Bt.label(new Bt.State("a", "AR", Bt.KIND_REMOTE, false, false, 36)));
+    }
+
+    @Test
+    public void btIcons_labelsAndColours_allStyles_noOverlap() {
+        List<Bt.State> st = Arrays.asList(
+                new Bt.State("E8:55:40:18:E2:97", "Xiaomi RC", Bt.KIND_REMOTE, false, true, 61),
+                new Bt.State("F3:4F:12:BF:58:8A", "AR", Bt.KIND_REMOTE, false, true, 36),
+                new Bt.State("78:66:F3:21:A3:F3", "HT-S20R", Bt.KIND_AUDIO, false, true, -1));
+        for (String s : STYLES) {
+            launch(s, null);
+            withWeather(fake());
+            activity.showBtStates(st);
+            settle();
+            LinearLayout row = (LinearLayout) field(activity, "btRow");
+            assertEquals(3, row.getChildCount());
+            BtIconView mi = (BtIconView) row.getChildAt(0), fire = (BtIconView) row.getChildAt(1), sony = (BtIconView) row.getChildAt(2);
+            assertEquals("Mi 61%", mi.label);
+            assertEquals(Bt.GREEN, mi.color);
+            assertEquals("Fire 36%", fire.label);
+            assertEquals(Bt.AMBER, fire.color);
+            assertEquals("Sony", sony.label);
+            Rect prev = null;
+            for (int i = 0; i < 3; i++) {
+                View v = row.getChildAt(i);
+                assertOnScreen(v);
+                Rect r = new Rect();
+                v.getGlobalVisibleRect(r);
+                if (prev != null) assertTrue(s + ": BT labels overlap", r.left >= prev.right);
+                prev = r;
+            }
+            // Not crowding the weather line / clock: the row is below them, without overlap.
+            Rect rowR = new Rect(), wx = new Rect();
+            row.getGlobalVisibleRect(rowR);
+            activity.weatherLine().getGlobalVisibleRect(wx);
+            assertFalse(s + ": BT row overlaps the weather line", Rect.intersects(rowR, wx));
+            shot(s + "-bt-labels");
+            tearDown();
+        }
+    }
 }
 

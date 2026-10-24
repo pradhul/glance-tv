@@ -2323,7 +2323,7 @@ public class MainActivity extends Activity {
             BtIconView v = new BtIconView(this);
             v.bind(s, ink);
             LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            if (btRow.getChildCount() > 0) l.setMarginStart(dp(10));
+            if (btRow.getChildCount() > 0) l.setMarginStart(dp(8));
             btRow.addView(v, l);
         }
         btRow.setVisibility(states.isEmpty() ? View.GONE : View.VISIBLE);
