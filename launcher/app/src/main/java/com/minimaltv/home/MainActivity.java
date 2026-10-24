@@ -45,6 +45,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -436,6 +437,9 @@ public class MainActivity extends Activity {
         ticker.removeCallbacks(weatherTick);
         ticker.post(weatherTick);
         registerReceiver(minuteTick, new IntentFilter(Intent.ACTION_TIME_TICK));
+        IntentFilter wf = new IntentFilter(WifiManager.RSSI_CHANGED_ACTION);
+        wf.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        registerReceiver(wifiChange, wf);
         try {
             getSystemService(ConnectivityManager.class)
                     .registerDefaultNetworkCallback(networkCallback, new Handler(Looper.getMainLooper()));
@@ -472,6 +476,7 @@ public class MainActivity extends Activity {
         ticker.removeCallbacks(weatherTick);
         ticker.removeCallbacks(autoJumpCheck);
         unregisterReceiver(minuteTick);
+        unregisterReceiver(wifiChange);
         ticker.removeCallbacks(signalTick);
         if (networkCallbackRegistered) {
             networkCallbackRegistered = false;
@@ -637,6 +642,7 @@ public class MainActivity extends Activity {
 
     /** Package names on the dock, in order: what was saved on this TV, or the config.xml list before any change. */
     private List<String> pinned() {
+        if (previewApps != null) return new ArrayList<>(previewApps);
         String saved = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_APPS, null);
         List<String> list = new ArrayList<>();
         if (saved == null) {
@@ -648,6 +654,10 @@ public class MainActivity extends Activity {
     }
 
     private void savePinned(List<String> list) {
+        if (previewApps != null) {   // v27 debug preview: never touches the saved list
+            previewApps = new ArrayList<>(list);
+            return;
+        }
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_APPS, TextUtils.join(",", list)).apply();
     }
 
@@ -972,6 +982,7 @@ public class MainActivity extends Activity {
     private void updateNetwork() {
         boolean wifi = false;
         boolean ethernet = false;
+        boolean validated = false;
         String ssid = null;
         int rssi = Integer.MIN_VALUE;
         Network vpn = null;
@@ -985,6 +996,7 @@ public class MainActivity extends Activity {
                 } else if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
                     boolean isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
                     wifi |= isWifi;
+                    validated |= caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
                     if (isWifi && ssid == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         Object info = caps.getTransportInfo();
                         if (info instanceof WifiInfo) {
@@ -1002,7 +1014,9 @@ public class MainActivity extends Activity {
         String label = ethernet ? getString(R.string.ethernet) : wifi ? wifiName() : getString(R.string.offline);
         // Full name; only very long ones are shortened (the pill also ellipsizes at its max width).
         if (label.length() > 24) label = label.substring(0, 23).trim() + "…";
-        network.setText(label);
+        // v27: no Wi-Fi name as text anywhere; the pill is an icon (bars / no internet / off), named for accessibility.
+        network.setText("");
+        network.setContentDescription(label);
         // The dock status: the full name, green dot when connected.
         online = wifi || ethernet;
         if (wifi && !ethernet) {
@@ -1010,7 +1024,9 @@ public class MainActivity extends Activity {
             netLabel = ssid != null ? ssid : getString(R.string.wifi_connected);
             if (rssi == Integer.MIN_VALUE || rssi <= -127 || rssi == NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED) rssi = wifiRssi();
             signalLevel = rssi <= -127 ? -1 : Math.max(0, Math.min(4, WifiManager.calculateSignalLevel(rssi, 5)));
+            netIconLevel = NetIcon.level(false, true, validated, rssi);
         } else {
+            netIconLevel = NetIcon.level(ethernet, false, validated, Integer.MIN_VALUE);
             netLabel = getString(ethernet ? R.string.ethernet : R.string.no_wifi);
             signalLevel = -1;
         }
@@ -1088,30 +1104,25 @@ public class MainActivity extends Activity {
 
     /** "Home WiFi" with a green dot, "Home WiFi · VPN · Germany" while a VPN is up, "No Wi-Fi" with a grey one. */
     private void drawStatus() {
-        String text = netLabel.isEmpty() ? getString(R.string.no_wifi) : netLabel;
+        // v27: the Wi-Fi name is no longer shown as text (the Wi-Fi icon on the pill says it). Only a VPN, which
+        // has no other place on screen, still gets the status line.
+        String text = "";
         if (vpnHandle != 0) {
-            String vpn;
-            if (vpnCountry != null) vpn = getString(R.string.vpn_country, vpnCountry);
-            else vpn = getString(vpnLookingUp ? R.string.vpn_checking : R.string.vpn_on);
-            text = getString(R.string.with_vpn, text, vpn);
+            if (vpnCountry != null) text = getString(R.string.vpn_country, vpnCountry);
+            else text = getString(vpnLookingUp ? R.string.vpn_checking : R.string.vpn_on);
         }
         netStatus.setText(text);
         if (netLine != null) netLine.setText(text);
+        updateNetLines();
+        drawWifiIcons();
         if (dockPair == null) return;
         netStatus.setTextColor(dockPair.ink);
         // Tinted one by one: the dot is green or grey, the signal bars take the ink.
         Drawable dot = getDrawable(R.drawable.ic_dot).mutate();
         dot.setBounds(0, 0, dot.getIntrinsicWidth(), dot.getIntrinsicHeight());
         dot.setTint(online ? dockPair.dotOn : dockPair.dotOff);
-        Drawable bars = null;
-        if (signalLevel >= 0) {
-            bars = getDrawable(R.drawable.ic_signal).mutate();
-            bars.setLevel(signalLevel);
-            bars.setBounds(0, 0, bars.getIntrinsicWidth(), bars.getIntrinsicHeight());
-            bars.setTint(dockPair.ink);
-        }
         netStatus.setCompoundDrawableTintList(null);
-        netStatus.setCompoundDrawables(dot, null, bars, null);
+        netStatus.setCompoundDrawables(dot, null, null, null);   // v27: the bars live on the Wi-Fi icon now
     }
 
     private void open(Intent intent) {
@@ -1488,9 +1499,9 @@ public class MainActivity extends Activity {
         findViewById(R.id.pills).setVisibility(classic);
         findViewById(R.id.btnAllApps).setVisibility(classic);
         findViewById(R.id.btnAdd).setVisibility(classic);
-        netStatus.setVisibility(classic);
+        updateNetLines();
         appName.setVisibility(c || pa ? View.GONE : View.VISIBLE);
-        netLine.setVisibility(c ? View.VISIBLE : View.GONE);
+
         morePill.setVisibility(c || pa ? View.VISIBLE : View.GONE);
         LinearLayout.LayoutParams al = (LinearLayout.LayoutParams) analog.getLayoutParams();
         al.width = al.height = dp(c ? 210 : 164);
@@ -1610,7 +1621,7 @@ public class MainActivity extends Activity {
      */
     private void fitDock() {
         if (dock == null || analog == null) return;
-        HorizontalScrollView scroll = findViewById(R.id.dockScroll);
+        FadeScrollView scroll = findViewById(R.id.dockScroll);
         int style = cardStyle();
         int avail = style == STYLE_GLASS ? screenW - dp(56) - dp(330)        // right of the 210dp clock + its text
                 : style == STYLE_POSTERS ? screenW - dp(55) - dp(55) : screenW - dp(72);
@@ -1619,7 +1630,10 @@ public class MainActivity extends Activity {
         // Posters widen 80 -> 280dp when focused.
         int need = dock.getMeasuredWidth() + (style == STYLE_POSTERS ? dp(200) : 0);
         boolean cap = need > avail;
-        int pad = cap ? dp(20) : 0, side = cap ? dp(32) : 0;   // sideways: room for the tilted poster's corner
+        // v27: vertical room for the focus scale, glow and lift shadow (posters tilt and widen, floating icons glow),
+        // sideways room for the tilted poster's corner. The padding is drawn into (clipToPadding off), and the
+        // scroller itself clips at its padded bounds, so nothing is cut at the row's own edge.
+        int pad = cap ? dp(34) : 0, side = cap ? dp(36) : 0;
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) scroll.getLayoutParams();
         lp.width = cap ? avail + 2 * side : ViewGroup.LayoutParams.WRAP_CONTENT;
         lp.setMargins(-side, -pad, -side, -pad);
@@ -1627,9 +1641,14 @@ public class MainActivity extends Activity {
         scroll.setPadding(side, pad, side, pad);
         // Last used ellipsizes before it can squeeze ⋯ out of the row (a narrow screen in glass).
         lastWatched.setMaxWidth(Math.min(dp(320), avail - dp(60)));
-        // clipChildren on the parent is what clips the scroller to its own bounds (it was off for glow room;
-        // the padding above now gives that room).
-        ((ViewGroup) scroll.getParent()).setClipChildren(cap);
+        // v27: the scroller clips its own content (inside the padded bounds) instead of the dock block clipping the
+        // scroller: the block's bounds do not include the negative margins, which cut the top and bottom. The ends
+        // fade (fading edge) only on a side that has more apps beyond it, and only when the row overflows.
+        ((ViewGroup) scroll.getParent()).setClipChildren(false);
+        scroll.setClipSelf(cap);
+        scroll.setClipToPadding(false);
+        scroll.setHorizontalFadingEdgeEnabled(cap);
+        scroll.setFadingEdgeLength(cap ? dp(64) : 0);
     }
 
     /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
@@ -1785,6 +1804,16 @@ public class MainActivity extends Activity {
     /** Debug: am start -n com.minimaltv.home/.MainActivity --ez forceRain true --es style glass|floating|posters */
     private void takeDebugExtras(Intent intent) {
         if (intent == null) return;
+        // v27 debug: --es previewApps pkg1,pkg2,...  shows that dock without saving it; --es previewApps "" ends it.
+        if (intent.hasExtra(EXTRA_PREVIEW_APPS)) {
+            String p = intent.getStringExtra(EXTRA_PREVIEW_APPS);
+            previewApps = p == null || p.trim().isEmpty() || p.trim().equals("none") ? null : new ArrayList<>(Arrays.asList(p.trim().split("\\s*,\\s*")));
+            intent.removeExtra(EXTRA_PREVIEW_APPS);
+            if (analog != null) {
+                rebuildKeepingFocus();
+                fitDock();
+            }
+        }
         String fx = intent.getStringExtra(EXTRA_FORCE_FX);
         if (fx != null) {
             fx = fx.trim().toLowerCase(Locale.ROOT);
@@ -2067,7 +2096,7 @@ public class MainActivity extends Activity {
         if (!(dock.getParent() instanceof HorizontalScrollView) || !v.hasFocus()) return;
         HorizontalScrollView sc = (HorizontalScrollView) dock.getParent();
         int view = sc.getWidth() - sc.getPaddingLeft() - sc.getPaddingRight();
-        int x = sc.getScrollX(), margin = dp(13);
+        int x = sc.getScrollX(), margin = dp(32);   // v27: clear of the 64dp end fade (36dp of it is padding)
         int right = v.getRight() + margin, left = v.getLeft() - margin;
         if (right > x + view) sc.scrollTo(right - view, 0);
         else if (left < x) sc.scrollTo(Math.max(0, left), 0);
@@ -2328,5 +2357,47 @@ public class MainActivity extends Activity {
         }
         if (top != null) applyTheme(themeTop, themePills, themeDock);   // the posters day dim on or off
     }
-}
 
+    // ---- v27: Wi-Fi as an icon on its control, no name text ------------------------------------------------
+
+    int netIconLevel = NetIcon.DISCONNECTED;
+
+    /** RSSI and Wi-Fi state changes: redraw the bars at once rather than on the 10 s tick. */
+    private final BroadcastReceiver wifiChange = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateNetwork();
+        }
+    };
+
+    /** The status lines (glass under the date, classic at the dock) only for a VPN; never the Wi-Fi name. */
+    private void updateNetLines() {
+        boolean vpn = vpnHandle != 0 && netStatus.getText().length() > 0;
+        int style = cardStyle();
+        netStatus.setVisibility(vpn && style == STYLE_FLOATING ? View.VISIBLE : View.GONE);
+        if (netLine != null) netLine.setVisibility(vpn && style == STYLE_GLASS ? View.VISIBLE : View.GONE);
+    }
+
+    /** The Wi-Fi pill (floating) is the icon alone; glass and posters put the icon on the ⋯ pill (Wi-Fi is in its menu). */
+    private void drawWifiIcons() {
+        int ink = pills != null ? pills.ink : Color.WHITE;
+        Drawable w = getDrawable(R.drawable.ic_wifi_level).mutate();
+        w.setLevel(netIconLevel);
+        w.setBounds(0, 0, dp(18), dp(18));
+        network.setCompoundDrawablesRelative(w, null, null, null);
+        network.setCompoundDrawablePadding(0);
+        network.setCompoundDrawableTintList(ColorStateList.valueOf(ink));
+        network.setPadding(dp(11), 0, dp(11), 0);
+        if (morePill != null) {
+            Drawable m = getDrawable(R.drawable.ic_wifi_level).mutate();
+            m.setLevel(netIconLevel);
+            m.setBounds(0, 0, dp(16), dp(16));
+            morePill.setCompoundDrawablesRelative(m, null, null, null);
+            morePill.setCompoundDrawablePadding(dp(6));
+            morePill.setCompoundDrawableTintList(ColorStateList.valueOf(dockPair != null ? dockPair.ink : Color.WHITE));
+        }
+    }
+
+    static final String EXTRA_PREVIEW_APPS = "previewApps";
+    private List<String> previewApps;
+}

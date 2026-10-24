@@ -911,5 +911,179 @@ public class DpadNavigationTest {
         assertFalse(activity.wallpaperLight);
         if (!night) assertNull("glass unchanged: no dim", wp.getColorFilter());
     }
+
+    // ---- v27: Wi-Fi icon, no Wi-Fi name text, unclipped scrolling row with end fades ------------------------
+
+    @Test
+    public void wifiIcon_levelMapping() {
+        assertEquals(NetIcon.ETHERNET, NetIcon.level(true, false, true, -50));
+        assertEquals(NetIcon.DISCONNECTED, NetIcon.level(false, false, false, -50));
+        assertEquals(NetIcon.NO_INTERNET, NetIcon.level(false, true, false, -50));
+        assertEquals(4, NetIcon.level(false, true, true, -40));
+        assertEquals(0, NetIcon.level(false, true, true, -100));
+        assertEquals(0, NetIcon.bars(Integer.MIN_VALUE));
+        assertEquals(0, NetIcon.bars(-127));
+        int prev = 0;
+        for (int rssi = -100; rssi <= -40; rssi += 5) {
+            int b = NetIcon.bars(rssi);
+            assertTrue(b >= prev && b <= 4);
+            prev = b;
+        }
+        assertTrue("some middle level", NetIcon.bars(-67) > 0 && NetIcon.bars(-67) < 4);
+        android.graphics.drawable.Drawable d = ApplicationProvider.getApplicationContext().getDrawable(R.drawable.ic_wifi_level);
+        for (int l = 0; l <= 7; l++) {
+            d.setLevel(l);
+            assertNotNull(d.getCurrent());
+        }
+    }
+
+    void collectTexts(View v, List<TextView> out) {
+        if (v instanceof TextView && v.isShown()) out.add((TextView) v);
+        if (v instanceof ViewGroup) for (int i = 0; i < ((ViewGroup) v).getChildCount(); i++) collectTexts(((ViewGroup) v).getChildAt(i), out);
+    }
+
+    @Test
+    public void noWifiNameText_iconOnTheControl_allStyles() throws Exception {
+        for (String s : STYLES) {
+            launch(s, null);
+            Field nl = MainActivity.class.getDeclaredField("netLabel");
+            nl.setAccessible(true);
+            nl.set(activity, "The Internet Of Us");
+            java.lang.reflect.Method ds = MainActivity.class.getDeclaredMethod("drawStatus");
+            ds.setAccessible(true);
+            ds.invoke(activity);
+            settle();
+            List<TextView> texts = new ArrayList<>();
+            collectTexts(activity.getWindow().getDecorView(), texts);
+            for (TextView t : texts) {
+                String x = t.getText().toString();
+                assertFalse(s + ": Wi-Fi name shown as text in " + describe(t), x.contains("Internet Of Us"));
+                assertFalse(s + ": Wi-Fi status text in " + describe(t), x.equals(activity.getString(R.string.no_wifi))
+                        || x.equals(activity.getString(R.string.offline)));
+            }
+            TextView control = s.equals("floating") ? (TextView) activity.findViewById(R.id.btnNetwork) : (TextView) moreView();
+            assertTrue(s + ": Wi-Fi control not shown", shown(control));
+            android.graphics.drawable.Drawable icon = control.getCompoundDrawablesRelative()[0];
+            assertNotNull(s + ": no Wi-Fi icon on " + describe(control), icon);
+            assertEquals(activity.netIconLevel, icon.getLevel());
+            if (s.equals("floating")) assertEquals("", ((TextView) activity.findViewById(R.id.btnNetwork)).getText().toString());
+            shot(s + "-wifi-icon");
+            tearDown();
+        }
+    }
+
+    List<String> installManyApps(int n) {
+        Context c = ApplicationProvider.getApplicationContext();
+        List<String> pk = new ArrayList<>(Arrays.asList(PKGS));
+        for (int i = 0; i < n; i++) {
+            String p = "com.example.many" + i;
+            PackageInfo pi = new PackageInfo();
+            pi.packageName = p;
+            pi.applicationInfo = new ApplicationInfo();
+            pi.applicationInfo.packageName = p;
+            pi.applicationInfo.nonLocalizedLabel = "Many " + i;
+            shadowOf(c.getPackageManager()).installPackage(pi);
+            ComponentName cn = new ComponentName(p, p + ".Main");
+            shadowOf(c.getPackageManager()).addActivityIfNotPresent(cn);
+            IntentFilter f = new IntentFilter(Intent.ACTION_MAIN);
+            f.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+            shadowOf(c.getPackageManager()).addIntentFilterForActivity(cn, f);
+            pk.add(p);
+        }
+        prefs().edit().putString("apps", String.join(",", pk)).commit();
+        return pk;
+    }
+
+    /** The tile as drawn (scale, tilt, translation) plus room for its glow/shadow, in the scroller's own coordinates. */
+    android.graphics.RectF drawnInScroller(View tile, FadeScrollView sc, int glow) {
+        android.graphics.RectF r = new android.graphics.RectF(-glow, -glow, tile.getWidth() + glow, tile.getHeight() + glow);
+        tile.getMatrix().mapRect(r);
+        View dock = (View) tile.getParent();
+        r.offset(tile.getLeft() + dock.getLeft() - sc.getScrollX(), tile.getTop() + dock.getTop() - sc.getScrollY());
+        return r;
+    }
+
+    void assertInside(String what, android.graphics.RectF r, FadeScrollView sc) {
+        assertTrue(what + " clipped: drawn " + r + " in " + sc.getWidth() + "x" + sc.getHeight(),
+                r.left >= -1 && r.top >= -1 && r.right <= sc.getWidth() + 1 && r.bottom <= sc.getHeight() + 1);
+    }
+
+    @Test
+    public void overflowRow_unclipped_fadesOnlyWhereMore_allStyles() {
+        installManyApps(9);
+        for (String s : STYLES) {
+            launch(s, null);
+            FadeScrollView sc = activity.findViewById(R.id.dockScroll);
+            ViewGroup dock = activity.findViewById(R.id.dock);
+            int glow = (int) (10 * activity.getResources().getDisplayMetrics().density);
+            assertTrue(s + ": row should overflow", sc.isHorizontalFadingEdgeEnabled());
+            assertTrue(s + ": row should clip at its own padded bounds", sc.clipsSelf());
+            assertFalse(s + ": a clipping parent would cut the padding (glow room)", ((ViewGroup) sc.getParent()).getClipChildren());
+            // The row sits within the screen area the style gives it (glass: right of the clock).
+            int[] xy = new int[2];
+            sc.getLocationOnScreen(xy);
+            assertTrue(s + ": row off screen at " + xy[0], xy[0] >= 0 && xy[0] + sc.getWidth() <= activity.getResources().getDisplayMetrics().widthPixels);
+            if (s.equals("glass")) {
+                int[] cxy = new int[2];
+                ((View) field(activity, "analog")).getLocationOnScreen(cxy);
+                assertTrue("glass: row over the clock", xy[0] >= cxy[0] + ((View) field(activity, "analog")).getWidth());
+            }
+            View first = dock.getChildAt(0);
+            assertSame(first, focused());
+            assertEquals(s + ": fade on the start side with nothing before", 0f, sc.leftFade(), 0.01f);
+            assertTrue(s + ": no fade on the side with more apps", sc.rightFade() > 0.5f);
+            assertInside(s + " first tile", drawnInScroller(first, sc, glow), sc);
+            shot(s + "-overflow-start");
+            for (int k = 0; k < dock.getChildCount() + 2; k++) {
+                press(KeyEvent.KEYCODE_DPAD_RIGHT);
+                View f = focused();
+                if (f.getParent() == dock) {
+                    assertInside(s + " tile " + dock.indexOfChild(f), drawnInScroller(f, sc, glow), sc);
+                    // A focused tile is never inside a fade.
+                    android.graphics.RectF r = new android.graphics.RectF(f.getLeft(), f.getTop(), f.getRight(), f.getBottom());
+                    r.offset(dock.getLeft() - sc.getScrollX(), 0);   // its layout slot (the 8% focus scale may graze the fade)
+                    int fade = sc.getHorizontalFadingEdgeLength();
+                    if (sc.leftFade() > 0) assertTrue(s + ": focused tile under the left fade", r.left >= fade - 2);
+                    if (sc.rightFade() > 0) assertTrue(s + ": focused tile under the right fade", r.right <= sc.getWidth() - fade + 2);
+                }
+            }
+            View last = dock.getChildAt(dock.getChildCount() - 1);
+            assertSame(s, last, focused());
+            assertEquals(s + ": fade at the end with nothing after", 0f, sc.rightFade(), 0.01f);
+            assertTrue(s + ": no fade on the side with more apps", sc.leftFade() > 0.5f);
+            assertInside(s + " last tile", drawnInScroller(last, sc, glow), sc);
+            shot(s + "-overflow-end");
+            tearDown();
+        }
+    }
+
+    @Test
+    public void fewApps_noFade_allStyles() {
+        prefs().edit().putString("apps", String.join(",", Arrays.copyOf(PKGS, 3))).commit();
+        for (String s : STYLES) {
+            launch(s, null);
+            FadeScrollView sc = activity.findViewById(R.id.dockScroll);
+            assertFalse(s + ": fade without overflow", sc.isHorizontalFadingEdgeEnabled());
+            assertEquals(0f, sc.leftFade(), 0f);
+            assertEquals(0f, sc.rightFade(), 0f);
+            tearDown();
+        }
+    }
+
+    @Test
+    public void previewAppsExtra_neverSavesTheDock() {
+        List<String> many = installManyApps(6);
+        String saved = String.join(",", PKGS);
+        prefs().edit().putString("apps", saved).commit();
+        launch("floating", null);
+        controller.newIntent(new Intent().putExtra("previewApps", String.join(",", many)));
+        settle();
+        assertEquals(many.size(), ((ViewGroup) activity.findViewById(R.id.dock)).getChildCount());
+        assertEquals(saved, prefs().getString("apps", null));
+        controller.newIntent(new Intent().putExtra("previewApps", "none"));
+        settle();
+        assertEquals(PKGS.length, ((ViewGroup) activity.findViewById(R.id.dock)).getChildCount());
+        assertEquals(saved, prefs().getString("apps", null));
+    }
 }
 

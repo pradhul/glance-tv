@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v27: Wi-Fi state by level: 0-4 bars, 5 no internet, 6 disconnected, 7 ethernet (see NetIcon). -->
+<level-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:maxLevel="0" android:drawable="@drawable/ic_wifi_l0" />
+    <item android:maxLevel="1" android:drawable="@drawable/ic_wifi_l1" />
+    <item android:maxLevel="2" android:drawable="@drawable/ic_wifi_l2" />
+    <item android:maxLevel="3" android:drawable="@drawable/ic_wifi_l3" />
+    <item android:maxLevel="4" android:drawable="@drawable/ic_wifi_l4" />
+    <item android:maxLevel="5" android:drawable="@drawable/ic_wifi_noinet" />
+    <item android:maxLevel="6" android:drawable="@drawable/ic_wifi_off" />
+    <item android:maxLevel="7" android:drawable="@drawable/ic_ethernet_line" />
+</level-list>

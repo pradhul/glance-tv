@@ -139,7 +139,7 @@
             android:letterSpacing="-0.01" />
 
         <!-- Scrolls sideways once more apps are pinned than fit. Tiles are 192x108dp with 20dp gaps. -->
-        <HorizontalScrollView
+        <com.minimaltv.home.FadeScrollView
             android:id="@+id/dockScroll"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -155,7 +155,7 @@
                 android:orientation="horizontal"
                 android:clipChildren="false"
                 android:clipToPadding="false" />
-        </HorizontalScrollView>
+        </com.minimaltv.home.FadeScrollView>
 
         <FrameLayout
             android:layout_width="match_parent"

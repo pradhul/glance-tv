@@ -63,7 +63,9 @@ You can switch styles from the **Card style…** button in the launcher settings
 - **Weather effects (v25, every style):** rain or drizzle shows the rain overlay, fog a slow mist, a clear night a soft static glow. All are cheap: no bitmaps, ≤30 fps rain, 8 fps mist, a glow that never animates.
 - **Bluetooth devices (v25):** line icons by the clock for a connected remote and a speaker/headphones. Connected is full ink, disconnected dimmed, never-connected-this-session hidden. A thin battery bar shows when the level is known, and an amber dot marks a remote under 20%. Needs `adb shell pm grant com.minimaltv.home android.permission.BLUETOOTH_CONNECT`.
 - **Last used pill:** opens the app you last played something in, showing the title when one is known. It is hidden while an HDMI tile is shown.
-- **Wi-Fi:** the full network name with signal bars. HDMI devices show up as tiles named after the device (for example "Nintendo Switch"), and the launcher remembers the name for each port.
+- **Wi-Fi (v27):** no network name as text any more. The Wi-Fi control has a line-style icon with 0–4 bars (from RSSI, updated on RSSI and network-state broadcasts), plus no-internet, off and Ethernet variants. Floating icons: the Wi-Fi pill is just the icon. Glass and posters: the icon sits on the ⋯ pill, which has Wi-Fi in its menu. A VPN still gets its short status line.
+- **Scrolling app row (v27):** when apps overflow, the row fades softly only on a side with more apps, and the focused tile's scale, glow and shadow are never clipped.
+- **Wi-Fi (before v27):** the full network name with signal bars. HDMI devices show up as tiles named after the device (for example "Nintendo Switch"), and the launcher remembers the name for each port.
 
 ### Debug ADB extras
 
@@ -73,6 +75,7 @@ adb shell am start -n com.minimaltv.home/.MainActivity --es style glass         
 adb shell am start -n com.minimaltv.home/.MainActivity --ez forceRain true      # rain overlay, not saved
 adb shell am start -n com.minimaltv.home/.MainActivity --es forceFx mist        # rain | mist | glow | none, not saved
 adb shell am start -n com.minimaltv.home/.MainActivity --ez openForecast true   # open the forecast panel
+adb shell am start -n com.minimaltv.home/.MainActivity --es previewApps a.b,c.d  # preview a dock list, never saved; 'none' ends it
 adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       # open the ⋯ menu
 ```
 
