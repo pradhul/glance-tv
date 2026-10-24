@@ -15,7 +15,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Simple single-colour app glyphs (Simple Icons, CC0; Material Icons, Apache-2.0) by package, tinted by the
+ * Simple single-colour app glyphs (Simple Icons, CC0; Material Icons, Apache-2.0; Arcticons line icons for
+ * streaming apps, CC BY-SA 4.0) by package, tinted by the
  * caller. Unknown apps get a rounded square with the label's first letter. Real icons are never used here.
  */
 final class Glyphs {
@@ -23,16 +24,20 @@ final class Glyphs {
     private static final Map<String, Integer> BY_PACKAGE = new HashMap<>();
 
     static {
-        BY_PACKAGE.put("com.netflix.ninja", R.drawable.ic_app_netflix);
+        BY_PACKAGE.put("com.netflix.ninja", R.drawable.ic_app_arc_netflix);
         BY_PACKAGE.put("com.netflix.mediaclient", R.drawable.ic_app_netflix);
-        BY_PACKAGE.put("com.google.android.youtube.tv", R.drawable.ic_app_youtube);
+        BY_PACKAGE.put("com.google.android.youtube.tv", R.drawable.ic_app_arc_youtube);
         BY_PACKAGE.put("com.google.android.youtube", R.drawable.ic_app_youtube);
-        BY_PACKAGE.put("org.smarttube.stable", R.drawable.ic_app_youtube);
+        BY_PACKAGE.put("org.smarttube.stable", R.drawable.ic_app_arc_smarttube);
         BY_PACKAGE.put("org.smarttube.beta", R.drawable.ic_app_youtube);
-        BY_PACKAGE.put("com.amazon.amazonvideo.livingroom", R.drawable.ic_app_primevideo);
-        BY_PACKAGE.put("com.apple.atve.androidtv.appletv", R.drawable.ic_app_appletv);
+        BY_PACKAGE.put("com.amazon.amazonvideo.livingroom", R.drawable.ic_app_arc_amazon_prime_video);
+        BY_PACKAGE.put("com.apple.atve.androidtv.appletv", R.drawable.ic_app_arc_apple_tv);
+        BY_PACKAGE.put("com.graymatrix.did", R.drawable.ic_app_arc_zee5);
+        BY_PACKAGE.put("in.startv.hotstar", R.drawable.ic_app_arc_jiohotstar);
+        BY_PACKAGE.put("com.sonyliv", R.drawable.ic_app_arc_sony_liv);
+        BY_PACKAGE.put("com.suntv.sunnxt", R.drawable.ic_app_arc_sun_nxt);
         BY_PACKAGE.put("com.crunchyroll.crunchyroid", R.drawable.ic_app_crunchyroll);
-        BY_PACKAGE.put("tv.airtel.xstream.tvapp", R.drawable.ic_app_airtel);
+        BY_PACKAGE.put("tv.airtel.xstream.tvapp", R.drawable.ic_app_arc_airtel_xstream);
         BY_PACKAGE.put("com.spotify.tv.android", R.drawable.ic_app_spotify);
         BY_PACKAGE.put("com.spotify.music", R.drawable.ic_app_spotify);
         BY_PACKAGE.put("com.plexapp.android", R.drawable.ic_app_plex);

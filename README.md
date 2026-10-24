@@ -48,7 +48,7 @@ You can switch styles from the **Card style…** button in the launcher settings
 - **Long-press Settings, or long-press ⋯:** opens the launcher settings:
   - **Auto-jump to HDMI:** when a device connected by HDMI turns on (for example a console or a set-top box), the TV switches to that input.
   - **Night mode:** from 22:00 to 06:00 the wallpaper is dimmed and the text turns amber.
-  - **Simple icons:** single-colour app glyphs from [Simple Icons](https://simpleicons.org) (CC0) and Material Icons (Apache-2.0) instead of the apps' own icons.
+  - **Simple icons:** single-colour app glyphs from [Simple Icons](https://simpleicons.org) (CC0) and Material Icons (Apache-2.0) instead of the apps' own icons. Since v32 the streaming apps (Netflix, YouTube, SmartTube, Prime Video, Apple TV, Airtel Xstream, ZEE5, JioHotstar, Sony LIV, Sun NXT) use thin line icons from [Arcticons](https://github.com/Arcticons-Team/Arcticons) (CC BY-SA 4.0), converted to vector drawables (`res/drawable/ic_app_arc_*.xml`, stroke width unchanged); other unknown apps keep the letter tile.
   - **Auto-switch style daily:** rotates Glass → Floating → Posters once a day, at local midnight or when you come back to Home. It is off by default. If you pick a style by hand while it is on, that style becomes today's style and the rotation continues from there.
   - **Card style…** and the system settings.
 - **Inputs menu:** readable rows listing the HDMI and AV inputs, each opening its input.
@@ -139,3 +139,5 @@ TV_HOST=<tv ip> tools/venv/bin/python -I tools/tv.py 'for p in <package> <packag
 ## Licence
 
 MIT, see `LICENSE`.
+
+Streaming-app glyphs `launcher/app/src/main/res/drawable/ic_app_arc_*.xml` are adapted from [Arcticons](https://github.com/Arcticons-Team/Arcticons) by the Arcticons team, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); those files stay under CC BY-SA 4.0. Brand marks belong to their owners.

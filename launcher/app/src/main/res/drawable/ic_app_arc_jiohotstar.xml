@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arcticons (CC BY-SA 4.0), github.com/Arcticons-Team/Arcticons. Converted from the 48x48 line SVG, original stroke width 1; centred in the 1.6:1 glyph box. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp" android:height="40dp" android:viewportWidth="76.8" android:viewportHeight="48">
+    <group android:translateX="14.4">
+        <path android:pathData="M21.8335,17.2382l3.22-10.0111.9367,11.0646,16.5099-10.8306-13.4655,15.0454,9.0744,7.4937-12.0598-2.9858-5.4447,13.7584.1756-13.2314-10.4209,2.6345,7.2595-6.03-12.1186-6.03,12.9973,1.288-3.0444-6.1472,6.3805,3.9815Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+</vector>

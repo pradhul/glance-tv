@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arcticons (CC BY-SA 4.0), github.com/Arcticons-Team/Arcticons. Converted from the 48x48 line SVG, original stroke width 1; centred in the 1.6:1 glyph box. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp" android:height="40dp" android:viewportWidth="76.8" android:viewportHeight="48">
+    <group android:translateX="14.4">
+        <path android:pathData="M38.5,5.5H9.5c-2.2091,0-4,1.7909-4,4v29c0,2.2091,1.7909,4,4,4h29c2.2091,0,4-1.7909,4-4V9.5c0-2.2091-1.7909-4-4-4Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M30.4634,23.1153h8.0366M34.4817,35.2468v-12.1324M19.9822,23.1153l8.0366,12.1315M28.0187,23.1153l-8.0366,12.1315" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M9.5,35.2468 L9.5,23.1144 L17.5366,35.2468 L17.5366,23.1144" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M28.2972,20.0523 L28.2972,12.7547 L33.1319,20.0523 L33.1319,12.7547" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M21.5831,12.7532v4.8803c-.0008,1.3351,1.0808,2.418,2.4159,2.4188s2.418-1.0808,2.4188-2.4159v-4.8832" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M15.0269,19.2532c.4479.582,1.0089.7991,1.7898.7991h1.0801c1.0052,0,1.8203-.8146,1.8208-1.8199v-.0073c0-1.0056-.8152-1.8208-1.8208-1.8208h-1.1913c-1.0066,0-1.8226-.816-1.8226-1.8226h0c0-1.008.8173-1.8262,1.8262-1.8262h1.0746c.7809,0,1.3419.2171,1.7898.8" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+</vector>
