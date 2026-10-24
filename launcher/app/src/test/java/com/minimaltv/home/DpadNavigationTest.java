@@ -1152,5 +1152,105 @@ public class DpadNavigationTest {
             tearDown();
         }
     }
-}
 
+    // ---- v29: hide apps from All apps ------------------------------------------------------------
+
+    AllAppsActivity openAllApps(boolean pick) {
+        Intent i = new Intent().setClassName("com.minimaltv.home", "com.minimaltv.home.AllAppsActivity");
+        if (pick) i.putExtra(AllAppsActivity.EXTRA_PICK, true).putExtra(AllAppsActivity.EXTRA_EXCLUDE, new String[]{PKGS[4]});
+        AllAppsActivity a = Robolectric.buildActivity(AllAppsActivity.class, i).setup().get();
+        android.widget.GridView g = a.findViewById(R.id.grid);
+        for (int k = 0; k < 100 && g.getAdapter() == null; k++) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(50));
+            try { Thread.sleep(20); } catch (InterruptedException ignored) { }
+        }
+        assertNotNull("All apps never loaded", g.getAdapter());
+        return a;
+    }
+
+    static List<String> gridPkgs(AllAppsActivity a) {
+        android.widget.GridView g = a.findViewById(R.id.grid);
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < g.getAdapter().getCount(); i++) out.add(((Apps.Entry) g.getAdapter().getItem(i)).pkg);
+        return out;
+    }
+
+    @Test
+    public void hiddenApps_leftOutOfAllAppsAndPicker() {
+        prefs().edit().putString(Apps.KEY_HIDDEN, PKGS[0] + "," + PKGS[2]).commit();
+        List<String> all = gridPkgs(openAllApps(false));
+        assertEquals(3, all.size());
+        assertFalse(all.contains(PKGS[0]));
+        assertFalse(all.contains(PKGS[2]));
+        List<String> pick = gridPkgs(openAllApps(true));
+        assertEquals(Arrays.asList(PKGS[1], PKGS[3]).size(), pick.size());
+        assertFalse(pick.contains(PKGS[0]) || pick.contains(PKGS[2]) || pick.contains(PKGS[4]));
+    }
+
+    @Test
+    public void allApps_longPressHide_removesAndPersists() {
+        AllAppsActivity a = openAllApps(false);
+        android.widget.GridView g = a.findViewById(R.id.grid);
+        Apps.Entry first = (Apps.Entry) g.getAdapter().getItem(0);
+        g.getOnItemLongClickListener().onItemLongClick(g, null, 0, 0);
+        shadowOf(Looper.getMainLooper()).idle();
+        AlertDialog d = a.hideDialog;
+        assertTrue("no hide dialog", d != null && d.isShowing());
+        ListView list = d.getListView();
+        assertEquals(a.getString(R.string.hide_app), String.valueOf(list.getAdapter().getItem(0)));
+        list.performItemClick(list.getChildAt(0), 0, 0);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(Apps.hidden(a).contains(first.pkg));
+        assertFalse(gridPkgs(a).contains(first.pkg));
+        assertFalse(gridPkgs(openAllApps(false)).contains(first.pkg));
+    }
+
+    @Test
+    public void dockTileOptions_hideKeepsOnDock() {
+        launch("glass", null);
+        longPress(KeyEvent.KEYCODE_DPAD_CENTER);
+        AlertDialog d = (AlertDialog) ShadowDialog.getLatestDialog();
+        ListView list = d.getListView();
+        assertEquals(2, list.getAdapter().getCount());
+        assertEquals(activity.getString(R.string.hide_app), String.valueOf(list.getAdapter().getItem(1)));
+        list.performItemClick(list.getChildAt(1), 1, 1);
+        settle();
+        assertEquals(1, Apps.hidden(activity).size());
+        assertTrue(prefs().getString("apps", "").contains(Apps.hidden(activity).iterator().next()));
+    }
+
+    @Test
+    public void moreMenu_hiddenApps_listsAndUnhides_allStyles() {
+        for (String s : MORE_STYLES) {
+            prefs().edit().putString(Apps.KEY_HIDDEN, PKGS[1] + "," + PKGS[3]).commit();
+            openMoreByDpad(s);
+            ViewGroup rows = (ViewGroup) morePopup().getContentView();
+            TextView last = (TextView) rows.getChildAt(rows.getChildCount() - 1);
+            assertEquals(activity.getString(R.string.hidden_apps), last.getText().toString());
+            for (int i = 1; i < rows.getChildCount(); i++) press(KeyEvent.KEYCODE_DPAD_DOWN);
+            assertSame(s + ": Hidden apps row not reachable", last, focused());
+            press(KeyEvent.KEYCODE_DPAD_CENTER);
+            AlertDialog d = activity.hiddenDialog;
+            assertTrue(s + ": no hidden apps dialog", d != null && d.isShowing());
+            ListView list = d.getListView();
+            assertEquals(2, list.getAdapter().getCount());
+            assertEquals("Show Spotify", String.valueOf(list.getAdapter().getItem(0)));
+            assertEquals("Show YouTube", String.valueOf(list.getAdapter().getItem(1)));
+            shot(s + "-hidden-apps");
+            list.performItemClick(list.getChildAt(1), 1, 1);
+            settle();
+            assertEquals(Collections.singleton(PKGS[3]), Apps.hidden(activity));
+            tearDown();
+            ShadowDialog.reset();
+        }
+    }
+
+    @Test
+    public void hiddenApps_emptyShowsHint() {
+        launch("glass", null);
+        activity.showHiddenApps();
+        settle();
+        assertTrue(activity.hiddenDialog.isShowing());
+        assertNull(activity.hiddenDialog.getListView() == null ? null : activity.hiddenDialog.getListView().getAdapter());
+    }
+}

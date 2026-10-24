@@ -36,6 +36,23 @@ final class Apps {
     private Apps() {
     }
 
+    /** v29: packages hidden from the All apps grid and the pin picker (prefs "dock", comma list). */
+    static final String KEY_HIDDEN = "hidden_apps";
+
+    static java.util.Set<String> hidden(Context c) {
+        String saved = c.getSharedPreferences("dock", Context.MODE_PRIVATE).getString(KEY_HIDDEN, "");
+        java.util.Set<String> set = new java.util.TreeSet<>();
+        for (String p : saved.split(",")) if (!p.trim().isEmpty()) set.add(p.trim());
+        return set;
+    }
+
+    static void setHidden(Context c, String pkg, boolean hide) {
+        java.util.Set<String> set = hidden(c);
+        if (hide) set.add(pkg); else set.remove(pkg);
+        c.getSharedPreferences("dock", Context.MODE_PRIVATE).edit()
+                .putString(KEY_HIDDEN, android.text.TextUtils.join(",", set)).apply();
+    }
+
     /** Launch intent for a package: its leanback entry first, then any launcher entry. Null when not installed. */
     static Intent launchIntent(PackageManager pm, String pkg) {
         Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);

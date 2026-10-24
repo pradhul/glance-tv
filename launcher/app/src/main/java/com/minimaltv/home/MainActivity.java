@@ -661,6 +661,36 @@ public class MainActivity extends Activity {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_APPS, TextUtils.join(",", list)).apply();
     }
 
+    AlertDialog hiddenDialog;
+
+    /** v29: ⋯ → Hidden apps: every hidden app by name; choosing one shows it in All apps again. */
+    void showHiddenApps() {
+        List<String> pkgs = new ArrayList<>(Apps.hidden(this));
+        android.content.pm.PackageManager pm = getPackageManager();
+        List<String[]> rows = new ArrayList<>();
+        for (String p : pkgs) {
+            String label = p;
+            try {
+                label = String.valueOf(pm.getApplicationLabel(pm.getApplicationInfo(p, 0)));
+            } catch (Exception ignored) {
+            }
+            rows.add(new String[]{p, label});
+        }
+        rows.sort((a, b) -> a[1].compareToIgnoreCase(b[1]));
+        CharSequence[] labels = new CharSequence[rows.size()];
+        for (int i = 0; i < labels.length; i++) labels[i] = getString(R.string.unhide_row, rows.get(i)[1]);
+        AlertDialog.Builder b = new AlertDialog.Builder(this, menuTheme()).setTitle(R.string.hidden_apps);
+        if (labels.length == 0) b.setMessage(R.string.no_hidden_apps);
+        else b.setItems(labels, (d, which) -> {
+            Apps.setHidden(this, rows.get(which)[0], false);
+            Toast.makeText(this, getString(R.string.app_unhidden, rows.get(which)[1]), Toast.LENGTH_SHORT).show();
+            if (Apps.hidden(this).size() > 0) showHiddenApps();
+        });
+        hiddenDialog = b.create();
+        dressDialog(hiddenDialog);
+        hiddenDialog.show();
+    }
+
     /** Opens the app list in pick mode, without the apps that are already on the dock. */
     private void startPicker() {
         Intent picker = new Intent(this, AllAppsActivity.class)
@@ -690,7 +720,12 @@ public class MainActivity extends Activity {
     private void confirmRemove(String pkg, String label) {
         removeDialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(label)
-                .setItems(new CharSequence[]{getString(R.string.remove_from_home)}, (dialog, which) -> {
+                .setItems(new CharSequence[]{getString(R.string.remove_from_home), getString(R.string.hide_app)}, (dialog, which) -> {
+                    if (which == 1) {   // v29: hide from All apps; stays on the dock
+                        Apps.setHidden(this, pkg, true);
+                        Toast.makeText(this, getString(R.string.app_hidden, label), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     List<String> list = pinned();
                     list.remove(pkg);
                     savePinned(list);
@@ -1520,14 +1555,16 @@ public class MainActivity extends Activity {
         popup.setOutsideTouchable(true);
         popup.setAnimationStyle(0);
         String[] labels = {getString(R.string.all_apps), getString(R.string.add_app), getString(R.string.inputs),
-                getString(R.string.wifi), getString(R.string.settings)};
-        int[] icons = {R.drawable.ic_apps_small, R.drawable.ic_add, R.drawable.ic_hdmi, R.drawable.ic_wifi, R.drawable.ic_app_settings};
+                getString(R.string.wifi), getString(R.string.settings), getString(R.string.hidden_apps)};
+        int[] icons = {R.drawable.ic_apps_small, R.drawable.ic_add, R.drawable.ic_hdmi, R.drawable.ic_wifi, R.drawable.ic_app_settings,
+                R.drawable.ic_eye_off};
         Runnable[] actions = {
                 () -> startActivity(new Intent(this, AllAppsActivity.class)),
                 this::startPicker,
                 () -> showInputs(anchor),
                 () -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)),
-                () -> open(new Intent(Settings.ACTION_SETTINGS))};
+                () -> open(new Intent(Settings.ACTION_SETTINGS)),
+                this::showHiddenApps};
         ColorStateList text = getColorStateList(isNight() ? R.color.menu_row_text_night : R.color.menu_row_text);
         for (int i = 0; i < labels.length; i++) {
             TextView row = (TextView) getLayoutInflater().inflate(R.layout.input_row, rows, false);

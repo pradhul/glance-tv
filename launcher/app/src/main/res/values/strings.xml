@@ -17,6 +17,12 @@
     <string name="add_app">Add app</string>
     <string name="add_to_home">Add to home</string>
     <string name="remove_from_home">Remove from home</string>
+    <string name="hide_app">Hide from All apps</string>
+    <string name="hidden_apps">Hidden apps</string>
+    <string name="no_hidden_apps">No hidden apps. Long-press an app in All apps to hide it.</string>
+    <string name="unhide_row">Show %1$s</string>
+    <string name="app_hidden">%1$s hidden from All apps</string>
+    <string name="app_unhidden">%1$s back in All apps</string>
     <string name="not_available">Not available</string>
     <string name="no_inputs">No inputs found</string>
     <string name="no_wifi">No Wi-Fi</string>
