@@ -2673,7 +2673,7 @@ public class MainActivity extends Activity {
             holiday = Holidays.line(holidays, holidayPreviewDate != null ? holidayPreviewDate : java.time.LocalDate.now());
         }
         String ordersJson = ordersPreviewJson;
-        if (ordersJson == null && !Orders.url(prefs().getString(Orders.KEY_URL, "")).isEmpty()) {
+        if (ordersJson == null && !Orders.url(prefs().getString(Orders.KEY_URL, Orders.DEFAULT_URL)).isEmpty()) {
             ordersJson = Orders.cached(prefs());
         }
         String text = Orders.join(holiday, Orders.line(Orders.parse(ordersJson)));
@@ -2728,7 +2728,7 @@ public class MainActivity extends Activity {
     }
 
     private void maybeRefreshOrders() {
-        String url = Orders.url(prefs().getString(Orders.KEY_URL, ""));
+        String url = Orders.url(prefs().getString(Orders.KEY_URL, Orders.DEFAULT_URL));
         if (url.isEmpty() || ordersBusy || UNDER_TEST) return;
         ordersBusy = true;
         final android.content.SharedPreferences p = prefs();

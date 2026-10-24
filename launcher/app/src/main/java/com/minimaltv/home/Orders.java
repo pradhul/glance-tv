@@ -56,6 +56,7 @@ final class Orders {
     }
 
     static final String KEY_URL = "orders_url";
+    static final String DEFAULT_URL = "https://gist.githubusercontent.com/pradhul/fc391fa36ebf4170e54e2080a3f93866/raw/orders.json";
     static final String KEY_CACHE = "orders_json";
     static final String EXTRA_URL = "ordersUrl";
     static final String EXTRA_JSON = "ordersJson";
