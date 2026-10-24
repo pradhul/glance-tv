@@ -48,6 +48,7 @@
     <string name="pref_auto_style">Auto-switch style daily</string>
     <string name="pref_bing">Daily Bing wallpaper</string>
     <string name="bing_refresh">Next Bing wallpaper</string>
+    <string name="bing_failed">Couldn\'t get a new wallpaper</string>
     <string name="auto_style_on">Auto-switch daily: on</string>
     <string name="auto_style_off">Auto-switch daily: off</string>
 </resources>

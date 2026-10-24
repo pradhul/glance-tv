@@ -36,11 +36,14 @@ final class Bing {
         }
     }
 
-    private static final String TAG = "Bing";
+    private static final String TAG = "MinimalTvBing";
+    static final String TAG_PUBLIC = TAG;
+    static final String HOST = "https://www.bing.com";
     static final String LIST_URL = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=en-IN";
     static final String DIR = "bing";
     static final String KEY_ID = "bing_id", KEY_FILE = "bing_file", KEY_COPY = "bing_copy", KEY_AT = "bing_at",
-            KEY_NIGHT = "bing_night", KEY_SEEN = "bing_seen", KEY_THEME = "bing_theme";
+            KEY_NIGHT = "bing_night", KEY_SEEN = "bing_seen", KEY_THEME = "bing_theme",
+            KEY_MANUAL = "bing_manual", KEY_MANUAL_NIGHT = "bing_manual_night";
     static final float SOFT_SIGMA = 3f, LIGHT_SIGMA = 1.5f, BLUR_SIGMA = 40f;
 
     private Bing() {
@@ -121,25 +124,41 @@ final class Bing {
 
     /** One fetch: the list, the thumbnails, one full photo and its variants. True when a new photo is stored. */
     static boolean refresh(Context c, SharedPreferences prefs, boolean night) {
-        String json = Holidays.get(LIST_URL);
+        Log.i(TAG, "refresh start night=" + night);
+        String json = fetchList();
         List<Entry> list = parseList(json);
+        Log.i(TAG, "list: " + list.size() + " entries");
         if (list.isEmpty()) return false;
-        for (Entry e : list) e.lum = thumbLum(e.urlbase);
+        for (Entry e : list) {
+            e.lum = thumbLum(e.urlbase);
+            Log.i(TAG, "thumb " + e.id + " lum=" + e.lum + " " + e.urlbase);
+        }
         List<String> seen = new ArrayList<>();
         for (String s : prefs.getString(KEY_SEEN, "").split(",")) if (!s.isEmpty()) seen.add(s);
         int i = pick(list, night, prefs.getString(KEY_ID, null), seen);
-        if (i < 0) return false;
+        if (i < 0) {
+            Log.i(TAG, "nothing new to pick");
+            return false;
+        }
         Entry e = list.get(i);
-        byte[] jpg = download("https://www.bing.com" + e.urlbase + "_1920x1080.jpg", 4 << 20);
-        if (jpg == null) return false;
+        Log.i(TAG, "chosen " + e.id + " lum=" + e.lum + " \"" + e.copyright + "\"");
+        byte[] jpg = download(abs(e.urlbase) + "_1920x1080.jpg", 4 << 20);
+        if (jpg == null) {
+            Log.w(TAG, "full photo download failed");
+            return false;
+        }
+        Log.i(TAG, "downloaded " + jpg.length + " bytes");
         String base = "b" + Integer.toHexString(e.id.hashCode()) + Long.toString(System.currentTimeMillis() % 100000, 36);
         File d = dir(c);
         try {
+            long t0 = System.currentTimeMillis();
             String theme = writeVariants(d, base, jpg);
+            Log.i(TAG, "variants for " + base + " in " + (System.currentTimeMillis() - t0) + " ms: " + theme);
             prefs.edit().putString(KEY_ID, e.id).putString(KEY_FILE, base).putString(KEY_COPY, e.copyright)
                     .putString(KEY_THEME, theme).putLong(KEY_AT, System.currentTimeMillis()).putBoolean(KEY_NIGHT, night)
                     .putString(KEY_SEEN, seenAfter(seen, e.id)).commit();
             cleanup(d, base);   // only now: the old photo stays until the new one is complete
+            Log.i(TAG, "stored " + base);
             return true;
         } catch (Throwable t) {   // OutOfMemoryError included: fall back to what was there
             Log.w(TAG, "variants failed", t);
@@ -156,11 +175,36 @@ final class Bing {
         return android.text.TextUtils.join(",", s);
     }
 
+    /** Bing answers with relative paths ("/th?id=..."): make them absolute; absolute ones pass through. */
+    static String abs(String u) {
+        if (u.startsWith("http://")) return "https://" + u.substring(7);
+        if (u.startsWith("https://")) return u;
+        if (u.startsWith("//")) return "https:" + u;
+        return HOST + (u.startsWith("/") ? "" : "/") + u;
+    }
+
+    static String thumbUrl(String urlbase) {
+        return abs(urlbase) + "_1920x1080.jpg&w=64&h=36&c=1";
+    }
+
+    private static String fetchList() {
+        byte[] b = download(LIST_URL, 1 << 20);
+        if (b == null) return null;
+        try {
+            return new String(b, "UTF-8");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static float thumbLum(String urlbase) {
-        byte[] b = download("https://www.bing.com/th?id=" + urlbase.replaceFirst("^/th\\?id=", "") + "_1920x1080.jpg&w=64&h=36&c=1", 64 << 10);
+        byte[] b = download(thumbUrl(urlbase), 64 << 10);
         if (b == null) return -1;
         Bitmap t = BitmapFactory.decodeByteArray(b, 0, b.length);
-        if (t == null) return -1;
+        if (t == null) {
+            Log.w(TAG, "thumb undecodable (" + b.length + " bytes)");
+            return -1;
+        }
         float l = meanLum(t, 0, 0, t.getWidth(), t.getHeight());
         t.recycle();
         return l;
@@ -235,11 +279,19 @@ final class Bing {
             c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
             c.setConnectTimeout(8000);
             c.setReadTimeout(15000);
-            if (c.getResponseCode() != 200) return null;
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) MinimalTvLauncher");
+            int code = c.getResponseCode();
+            if (code != 200) {
+                Log.w(TAG, "HTTP " + code + " for " + url);
+                return null;
+            }
             try (java.io.InputStream in = c.getInputStream()) {
-                return Holidays.readAll(in, max);
+                byte[] b = Holidays.readAll(in, max);
+                if (url.equals(LIST_URL)) Log.i(TAG, "list HTTP 200, " + b.length + " bytes");
+                return b;
             }
         } catch (Exception e) {
+            Log.w(TAG, "download failed: " + url, e);
             return null;
         } finally {
             if (c != null) c.disconnect();

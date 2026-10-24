@@ -304,13 +304,22 @@ public class MainActivity extends Activity {
         final boolean light = cardStyle() == STYLE_POSTERS;
         new Thread(() -> {
             // v30: the daily Bing photo, unless the weather calls for its own set or a photo is forced.
-            Wallpapers.Loaded bing = sky.isEmpty() && forced == null && bingOn()
+            // v31: a manual refresh press wins over the weather set until the next day/night switch.
+            boolean manual = bingManualActive(night);
+            Wallpapers.Loaded bing = (sky.isEmpty() || manual) && forced == null && bingOn()
                     ? Wallpapers.loadBing(this, prefs(), light) : null;
+            android.util.Log.i(Bing.TAG_PUBLIC, "wallpaper: sky='" + sky + "' manual=" + manual + " forced=" + forced
+                    + " -> " + (bing != null ? "bing " + bing.theme.file : "bundled"));
             final boolean fromBing = bing != null;
             final Wallpapers.Loaded loaded = fromBing ? bing : Wallpapers.pickAndLoad(this, night, sky, light, forced);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 showBingCredit(fromBing);
+                if (bingTickPending) {   // v31: the tick only once the photo is actually on screen
+                    bingTickPending = false;
+                    android.util.Log.i(Bing.TAG_PUBLIC, "applied " + loaded.theme.file + " fromBing=" + fromBing);
+                    setBingState(fromBing ? BING_OK : BING_FAILED);
+                }
                 blurred = loaded.blurred;
                 wallpaperLum = loaded.theme.luminance;
                 rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
@@ -1010,7 +1019,7 @@ public class MainActivity extends Activity {
         if (applyAutoStyle(true)) rebuildKeepingFocus();   // crossed midnight with auto-switch on
         updateNetwork();
         if (nightHours() != wallpaperNight) {
-            prefs().edit().remove(KEY_FORCED_WP).apply();   // a forced photo lasts until the next rotation
+            prefs().edit().remove(KEY_FORCED_WP).remove(Bing.KEY_MANUAL).apply();   // a forced photo / manual Bing pick lasts until the next rotation
             loadWallpaper();
             maybeRefreshBing(false);   // v30: a new Bing pick at the morning and evening switch
         }   // crossed 06:00 or 22:00: switch sets now
@@ -2537,7 +2546,29 @@ public class MainActivity extends Activity {
             t.setTextColor(ink);
             t.setShadowLayer(sr, 0, sr > 0 ? density : 0, 0x66000000);
         }
-        bingRefresh.setImageTintList(ColorStateList.valueOf(ink));
+        bingInk = ink;
+        if (bingState == BING_IDLE) bingRefresh.setImageTintList(ColorStateList.valueOf(ink));
+    }
+
+    // v31: refresh button states: idle ↻, loading (spinning ↻), ok (green ✓ ~1.8 s), failed (red ✕ ~2 s).
+    static final int BING_IDLE = 0, BING_LOADING = 1, BING_OK = 2, BING_FAILED = 3;
+    int bingState = BING_IDLE;
+    int bingInk = Color.WHITE;
+    boolean bingTickPending;
+    private final Runnable bingBackToIdle = () -> setBingState(BING_IDLE);
+
+    void setBingState(int state) {
+        bingState = state;
+        if (bingRefresh == null) return;
+        bingRefresh.removeCallbacks(bingBackToIdle);
+        setBingLoading(state == BING_LOADING);
+        int icon = state == BING_OK ? R.drawable.ic_check : state == BING_FAILED ? R.drawable.ic_cross : R.drawable.ic_refresh;
+        int tint = state == BING_OK ? 0xFF4CD964 : state == BING_FAILED ? 0xFFFF453A : bingInk;
+        bingRefresh.setImageResource(icon);
+        bingRefresh.setImageTintList(ColorStateList.valueOf(tint));
+        bingRefresh.setAlpha(state == BING_IDLE ? 0.45f : 1f);
+        if (state == BING_OK) bingRefresh.postDelayed(bingBackToIdle, 1800);
+        if (state == BING_FAILED) bingRefresh.postDelayed(bingBackToIdle, 2000);
     }
 
     private void showBingCredit(boolean fromBing) {
@@ -2549,16 +2580,27 @@ public class MainActivity extends Activity {
 
     /** The refresh button: one new pick right away (skipping the current photo), spinning while it downloads. */
     private void refreshBingNow() {
+        android.util.Log.i(Bing.TAG_PUBLIC, "refresh button pressed (on=" + bingOn() + ", busy=" + bingBusy + ")");
         if (!bingOn()) return;
         maybeRefreshBing(true);
+    }
+
+    /** v31: true while a manual refresh pick should override the weather set (same half of the day as the press). */
+    boolean bingManualActive(boolean night) {
+        android.content.SharedPreferences p = prefs();
+        return p.getBoolean(Bing.KEY_MANUAL, false) && p.getBoolean(Bing.KEY_MANUAL_NIGHT, false) == night;
     }
 
     private void maybeRefreshBing(boolean force) {
         if (!bingOn() || bingBusy || UNDER_TEST) return;
         final boolean night = nightHours();
         if (!force && !Bing.stale(this, prefs(), night)) return;
+        if (force) {   // manual: the new photo must show, over the weather set and any forced photo
+            prefs().edit().putBoolean(Bing.KEY_MANUAL, true).putBoolean(Bing.KEY_MANUAL_NIGHT, night)
+                    .remove(KEY_FORCED_WP).commit();
+        }
         bingBusy = true;
-        setBingLoading(true);
+        setBingState(BING_LOADING);
         final Context app = getApplicationContext();
         final android.content.SharedPreferences p = prefs();
         new Thread(() -> {
@@ -2566,14 +2608,22 @@ public class MainActivity extends Activity {
             try {
                 ok = Bing.refresh(app, p, night);
             } catch (Throwable t) {
-                android.util.Log.w("Bing", "refresh failed", t);
+                android.util.Log.e(Bing.TAG_PUBLIC, "refresh failed", t);
             }
             final boolean changed = ok;
             runOnUiThread(() -> {
                 bingBusy = false;
                 if (isFinishing() || isDestroyed()) return;
-                setBingLoading(false);
-                if (changed) loadWallpaper();
+                android.util.Log.i(Bing.TAG_PUBLIC, "refresh done ok=" + changed + " manual=" + force);
+                if (changed) {
+                    android.util.Log.i(Bing.TAG_PUBLIC, "applying " + p.getString(Bing.KEY_FILE, null));
+                    bingTickPending = true;
+                    setBingState(BING_LOADING);   // keep spinning until the decode thread has put it on screen
+                    loadWallpaper();
+                } else {
+                    setBingState(force ? BING_FAILED : BING_IDLE);
+                    if (force && Bing.current(app, p) != null) loadWallpaper();   // at least show the stored Bing photo
+                }
             });
         }).start();
     }
