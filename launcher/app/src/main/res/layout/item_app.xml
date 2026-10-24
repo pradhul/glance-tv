@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:descendantFocusability="blocksDescendants"
+    android:focusable="false"
+    android:clickable="false">
 
-    <!-- v34: the focus glow (brand colour) lies fully inside the cell, centred on the icon, so nothing clips it:
-         top = paddingTop 22dp + half icon 32dp - half glow 52dp = 2dp. -->
+    <!-- Focus glow stays inside the cell (top = 22dp + 32dp − 52dp = 2dp). The grid clips, so this
+         must not overflow: unclipped overflow broke D-pad selection on the TV in v34. -->
     <View
         android:id="@+id/glow"
         android:layout_width="104dp"
         android:layout_height="104dp"
         android:layout_marginTop="2dp"
         android:layout_gravity="top|center_horizontal"
+        android:focusable="false"
+        android:clickable="false"
+        android:focusableInTouchMode="false"
+        android:importantForAccessibility="no"
         android:visibility="invisible" />
 
     <LinearLayout
@@ -18,6 +25,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
+        android:focusable="false"
+        android:clickable="false"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
         android:paddingTop="22dp"
@@ -27,6 +36,8 @@
             android:id="@+id/icon"
             android:layout_width="64dp"
             android:layout_height="64dp"
+            android:focusable="false"
+            android:clickable="false"
             android:scaleType="fitCenter" />
 
         <TextView
@@ -34,6 +45,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:focusable="false"
+            android:clickable="false"
             android:gravity="center"
             android:singleLine="true"
             android:ellipsize="end"

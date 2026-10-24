@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tags: never use the untyped setTag(Object) on GridView cells — AbsListView can collide. -->
+    <item name="tag_glow_pos" type="id" />
+    <item name="tag_cell_pos" type="id" />
+</resources>

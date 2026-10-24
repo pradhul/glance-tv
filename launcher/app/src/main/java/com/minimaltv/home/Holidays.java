@@ -7,10 +7,7 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -111,31 +108,11 @@ final class Holidays {
     }
 
     static String get(String url) {
-        HttpURLConnection c = null;
-        try {
-            c = (HttpURLConnection) new URL(url).openConnection();
-            c.setConnectTimeout(8000);
-            c.setReadTimeout(8000);
-            if (c.getResponseCode() != 200) return null;
-            try (InputStream in = c.getInputStream()) {
-                return new String(readAll(in, 1 << 20), "UTF-8");
-            }
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (c != null) c.disconnect();
-        }
+        return HttpIo.getString(url, 8000, 8000, 1 << 20);
     }
 
     static byte[] readAll(InputStream in, int max) throws java.io.IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) > 0) {
-            out.write(buf, 0, n);
-            if (out.size() > max) throw new java.io.IOException("too big");
-        }
-        return out.toByteArray();
+        return HttpIo.read(in, max);
     }
 
     private static String asset(Context c, String name) {

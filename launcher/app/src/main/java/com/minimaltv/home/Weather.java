@@ -3,11 +3,6 @@ package com.minimaltv.home;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 /**
  * Weather for Singasandra, Bangalore, from Open-Meteo (no key): current conditions, the next hours and the
  * air quality. v25: two small requests (forecast + air quality); the raw answers are cached by the caller so a
@@ -116,22 +111,7 @@ final class Weather {
     }
 
     private static String get(String url) {
-        HttpURLConnection c = null;
-        try {
-            c = (HttpURLConnection) new URL(url).openConnection();
-            c.setConnectTimeout(8000);
-            c.setReadTimeout(8000);
-            if (c.getResponseCode() != 200) return null;
-            InputStream in = c.getInputStream();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[4096];
-            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
-            return out.toString("UTF-8");
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (c != null) c.disconnect();
-        }
+        return HttpIo.getString(url, 8000, 8000, 1 << 20);
     }
 
     /** WMO weather code to a short word. */

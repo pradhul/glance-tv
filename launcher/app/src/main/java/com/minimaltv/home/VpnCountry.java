@@ -2,10 +2,6 @@ package com.minimaltv.home;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.Locale;
 
 /**
@@ -45,25 +41,13 @@ final class VpnCountry {
     }
 
     private static String fetchCode(String url, String field) {
-        HttpURLConnection connection = null;
+        byte[] body = HttpIo.getBytes(url, 5000, 5000, 8192, null, "application/json");
+        if (body == null) return null;
         try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
-            connection.setRequestProperty("Accept", "application/json");
-            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return null;
-            try (InputStream in = connection.getInputStream()) {
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                byte[] buffer = new byte[512];
-                int n;
-                while ((n = in.read(buffer)) > 0 && out.size() < 8192) out.write(buffer, 0, n);
-                String code = new JSONObject(out.toString("UTF-8")).optString(field, "");
-                return code.length() == 2 ? code.toUpperCase(Locale.ROOT) : null;
-            }
+            String code = new JSONObject(new String(body, "UTF-8")).optString(field, "");
+            return code.length() == 2 ? code.toUpperCase(Locale.ROOT) : null;
         } catch (Exception e) {
             return null;
-        } finally {
-            if (connection != null) connection.disconnect();
         }
     }
 }

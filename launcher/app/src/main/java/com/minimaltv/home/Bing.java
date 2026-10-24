@@ -286,7 +286,7 @@ final class Bing {
                 return null;
             }
             try (java.io.InputStream in = c.getInputStream()) {
-                byte[] b = Holidays.readAll(in, max);
+                byte[] b = HttpIo.read(in, max);
                 if (url.equals(LIST_URL)) Log.i(TAG, "list HTTP 200, " + b.length + " bytes");
                 return b;
             }
