@@ -108,6 +108,13 @@ final class Wallpapers {
     }
 
     static Bitmap background(Context context, String file, boolean light) {
+        java.io.File d = new java.io.File(context.getFilesDir(), Bing.DIR);
+        if (new java.io.File(d, file).exists()) {   // v30: the Bing photo and its generated variants
+            Bitmap b = light ? decodeFile(new java.io.File(d, file.replace(".jpg", "-light.jpg"))) : null;
+            if (b == null) b = decodeFile(new java.io.File(d, file.replace(".jpg", "-soft.jpg")));
+            if (b == null) b = decodeFile(new java.io.File(d, file));
+            return b;
+        }
         return background(context.getAssets(), file, light);
     }
 
@@ -118,27 +125,56 @@ final class Wallpapers {
             JSONArray array = new JSONArray(new String(buf, 0, n, "UTF-8"));
             Theme[] themes = new Theme[array.length()];
             for (int i = 0; i < array.length(); i++) {
-                JSONObject o = array.getJSONObject(i);
-                // Light text unless the region is really bright: mid-tones (sunsets) read better in white.
-                JSONObject l = o.optJSONObject("luminance");
-                boolean topDark = "dark".equals(o.optString("top")) || (l != null && l.optDouble("top", 1) < LIGHT_TEXT_BELOW);
-                boolean pillsDark = "dark".equals(o.optString("pills")) || (l != null && l.optDouble("pills", 1) < LIGHT_TEXT_BELOW);
-                themes[i] = new Theme(o.getString("file"), topDark, pillsDark,
-                        "dark".equals(o.optString("dock")));
-                // Sets: day, night, cloudy-day, cloudy-night, rain-day, rain-night.
-                String set = o.optString("set");
-                themes[i].night = set.endsWith("night");
-                int dash = set.indexOf('-');
-                themes[i].weather = dash > 0 ? set.substring(0, dash) : "";
-                JSONObject lum = o.optJSONObject("luminance");
-                themes[i].luminance = lum == null ? 0.5f
-                        : (float) (lum.optDouble("top", .5) + lum.optDouble("pills", .5) + lum.optDouble("dock", .5)) / 3f;
+                themes[i] = theme(array.getJSONObject(i));
             }
             return themes;
         } catch (Exception e) {
             Log.w(TAG, "themes.json unreadable", e);
             return new Theme[0];
         }
+    }
+
+    /** One themes.json line (v30: also the Bing photo's generated line). */
+    static Theme theme(JSONObject o) throws org.json.JSONException {
+        // Light text unless the region is really bright: mid-tones (sunsets) read better in white.
+        JSONObject l = o.optJSONObject("luminance");
+        boolean topDark = "dark".equals(o.optString("top")) || (l != null && l.optDouble("top", 1) < LIGHT_TEXT_BELOW);
+        boolean pillsDark = "dark".equals(o.optString("pills")) || (l != null && l.optDouble("pills", 1) < LIGHT_TEXT_BELOW);
+        Theme t = new Theme(o.getString("file"), topDark, pillsDark,
+                "dark".equals(o.optString("dock")));
+        // Sets: day, night, cloudy-day, cloudy-night, rain-day, rain-night.
+        String set = o.optString("set");
+        t.night = set.endsWith("night");
+        int dash = set.indexOf('-');
+        t.weather = dash > 0 ? set.substring(0, dash) : "";
+        JSONObject lum = o.optJSONObject("luminance");
+        t.luminance = lum == null ? 0.5f
+                : (float) (lum.optDouble("top", .5) + lum.optDouble("pills", .5) + lum.optDouble("dock", .5)) / 3f;
+        return t;
+    }
+
+    /** v30: the stored Bing photo from files/bing, or null (none, disabled, or undecodable). Off the main thread. */
+    static Loaded loadBing(Context context, android.content.SharedPreferences prefs, boolean light) {
+        String base = Bing.current(context, prefs);
+        if (base == null) return null;
+        try {
+            Theme theme = theme(new JSONObject(prefs.getString(Bing.KEY_THEME, "{}")));
+            Bitmap sharp = background(context, theme.file, light);
+            if (sharp == null) return null;
+            Bitmap blurred = decodeFile(new java.io.File(Bing.dir(context), base + "-blur.jpg"));
+            lastFile = theme.file;
+            return new Loaded(theme, sharp, blurred);
+        } catch (Exception e) {
+            Log.w(TAG, "bing theme unreadable", e);
+            return null;
+        }
+    }
+
+    static Bitmap decodeFile(java.io.File f) {
+        if (!f.exists()) return null;
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inPreferredConfig = Bitmap.Config.RGB_565;
+        return BitmapFactory.decodeFile(f.getPath(), opts);
     }
 
     private static Bitmap decode(AssetManager assets, String name) {

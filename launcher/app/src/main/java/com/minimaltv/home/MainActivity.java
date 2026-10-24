@@ -264,6 +264,7 @@ public class MainActivity extends Activity {
         buildLayoutC();
         buildV21(root);
         buildV25(root);
+        buildV30(root);
         takeDebugExtras(getIntent());
         applyAutoStyle(false);
         updateClockStyle();
@@ -302,9 +303,14 @@ public class MainActivity extends Activity {
         wallpaperBusy = true;
         final boolean light = cardStyle() == STYLE_POSTERS;
         new Thread(() -> {
-            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, sky, light, forced);
+            // v30: the daily Bing photo, unless the weather calls for its own set or a photo is forced.
+            Wallpapers.Loaded bing = sky.isEmpty() && forced == null && bingOn()
+                    ? Wallpapers.loadBing(this, prefs(), light) : null;
+            final boolean fromBing = bing != null;
+            final Wallpapers.Loaded loaded = fromBing ? bing : Wallpapers.pickAndLoad(this, night, sky, light, forced);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
+                showBingCredit(fromBing);
                 blurred = loaded.blurred;
                 wallpaperLum = loaded.theme.luminance;
                 rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
@@ -374,6 +380,7 @@ public class MainActivity extends Activity {
             netLine.setShadowLayer((topDark || night) ? 6 * density : 0, 0, density, 0x66000000);
         }
         weatherView.setCompoundDrawableTintList(ColorStateList.valueOf(ink));
+        tintV30(ink, topDark || night);
         refreshBt();
 
         for (int id : new int[]{R.id.btnInputs, R.id.btnNetwork, R.id.btnSettings}) {
@@ -390,7 +397,7 @@ public class MainActivity extends Activity {
         // Scrims: a radial lift behind the clock block, a linear lift under the dock, each in its region's tint.
         int topTint = top.tint & 0x00FFFFFF;
         GradientDrawable radial = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x57000000 | topTint, 0x00000000 | topTint});
+                new int[]{0x66000000 | topTint, 0x00000000 | topTint});   // v30: a bit stronger for the sharper photo
         radial.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         radial.setGradientCenter(0.5f, 0.36f);
         radial.setGradientRadius(screenW * 0.42f);
@@ -1005,7 +1012,9 @@ public class MainActivity extends Activity {
         if (nightHours() != wallpaperNight) {
             prefs().edit().remove(KEY_FORCED_WP).apply();   // a forced photo lasts until the next rotation
             loadWallpaper();
+            maybeRefreshBing(false);   // v30: a new Bing pick at the morning and evening switch
         }   // crossed 06:00 or 22:00: switch sets now
+        updateHolidayLine();
         if (isNight() != nightApplied) {
             applyTheme(themeTop, themePills, themeDock);
             buildDock();
@@ -1265,13 +1274,17 @@ public class MainActivity extends Activity {
     /** Long-press on Settings: the launcher's own switches, plus the way to the system settings. */
     private void showLauncherSettings() {
         String[] items = {getString(R.string.pref_auto_hdmi), getString(R.string.pref_night), getString(R.string.pref_simple_icons),
-                getString(R.string.pref_auto_style)};
-        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true), simpleIcons(), autoStyle()};
+                getString(R.string.pref_auto_style), getString(R.string.pref_bing)};
+        boolean[] checked = {prefs().getBoolean(KEY_AUTO_HDMI, true), prefs().getBoolean(KEY_NIGHT, true), simpleIcons(), autoStyle(), bingOn()};
         AlertDialog dialog = new AlertDialog.Builder(this, menuTheme())
                 .setTitle(R.string.launcher_settings)
                 .setMultiChoiceItems(items, checked, (d, which, on) -> {
                     if (which == 3) {
                         setAutoStyle(on);
+                        return;
+                    }
+                    if (which == 4) {
+                        setBing(on);
                         return;
                     }
                     prefs().edit().putBoolean(which == 0 ? KEY_AUTO_HDMI : which == 1 ? KEY_NIGHT : KEY_SIMPLE_ICONS, on).apply();
@@ -1883,6 +1896,7 @@ public class MainActivity extends Activity {
                 }
             }, 800);
         }
+        takeV30Extras(intent);
         String st = intent.getStringExtra(EXTRA_STYLE);
         if (st != null) {
             st = st.trim().toLowerCase(Locale.ROOT);
@@ -2373,7 +2387,7 @@ public class MainActivity extends Activity {
 
     // ---- v26: lighter wallpaper blur in tall posters --------------------------------------------------------
 
-    static final int POSTERS_DAY_DIM = 0x1F000000;   // ~12% black, posters by day only
+    static final int POSTERS_DAY_DIM = 0x24000000;   // ~14% black, posters by day only (v30: a touch more for the sharper photo)
     String wallpaperFile;
     boolean wallpaperLight;
 
@@ -2437,4 +2451,192 @@ public class MainActivity extends Activity {
 
     static final String EXTRA_PREVIEW_APPS = "previewApps";
     private List<String> previewApps;
+
+    // ---- v30: daily Bing wallpaper, holiday line --------------------------------------------------
+
+    static final String KEY_BING = "bing_on";
+    /** Robolectric: no real network from the unit tests. */
+    static final boolean UNDER_TEST = "robolectric".equals(android.os.Build.FINGERPRINT);
+    static final String EXTRA_BING_REFRESH = "bingRefresh";       // --ez bingRefresh true: fetch the next pick now
+    static final String EXTRA_HOLIDAY_DATE = "holidayDate";       // --es holidayDate 2026-11-07: preview the line for that day
+    static final String EXTRA_HOLIDAY_TEXT = "holidayText";       // --es holidayText "Happy Diwali": show that text
+    TextView holidayLine, bingCredit;
+    ImageView bingRefresh;
+    volatile boolean bingBusy;
+    private java.time.LocalDate holidayPreviewDate;
+    private String holidayPreviewText;
+    private java.util.List<Holidays.Holiday> holidays;
+
+    boolean bingOn() {
+        return prefs().getBoolean(KEY_BING, true);
+    }
+
+    private void setBing(boolean on) {
+        prefs().edit().putBoolean(KEY_BING, on).apply();
+        if (bingRefresh != null) bingRefresh.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (on) maybeRefreshBing(false);
+        loadWallpaper();
+    }
+
+    private void buildV30(FrameLayout root) {
+        holidayLine = new TextView(this);
+        holidayLine.setTextSize(11);
+        holidayLine.setAlpha(0.75f);
+        holidayLine.setSingleLine(true);
+        holidayLine.setLetterSpacing(0.02f);
+        FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
+        hl.topMargin = dp(10);
+        hl.leftMargin = dp(18);
+        root.addView(holidayLine, root.getChildCount() - 1, hl);
+
+        bingCredit = new TextView(this);
+        bingCredit.setTextSize(8);
+        bingCredit.setAlpha(0.5f);
+        bingCredit.setSingleLine(true);
+        bingCredit.setEllipsize(TextUtils.TruncateAt.END);
+        bingCredit.setMaxWidth(dp(360));
+        bingCredit.setVisibility(View.GONE);
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END);
+        cl.bottomMargin = dp(6);
+        cl.rightMargin = dp(22);
+        root.addView(bingCredit, root.getChildCount() - 1, cl);
+
+        bingRefresh = new ImageView(this);
+        bingRefresh.setImageResource(R.drawable.ic_refresh);
+        bingRefresh.setContentDescription(getString(R.string.bing_refresh));
+        bingRefresh.setFocusable(true);
+        bingRefresh.setPadding(dp(4), dp(4), dp(4), dp(4));
+        bingRefresh.setAlpha(0.45f);
+        GradientDrawable ring = new GradientDrawable();
+        ring.setShape(GradientDrawable.OVAL);
+        ring.setColor(0x00000000);
+        bingRefresh.setBackground(ring);
+        bingRefresh.setOnFocusChangeListener((v, f) -> {
+            v.setAlpha(f ? 1f : 0.45f);
+            ring.setColor(f ? 0x33FFFFFF : 0x00000000);
+            v.animate().scaleX(f ? 1.15f : 1f).scaleY(f ? 1.15f : 1f).setDuration(120).start();
+        });
+        bingRefresh.setOnClickListener(v -> refreshBingNow());
+        bingRefresh.setVisibility(bingOn() ? View.VISIBLE : View.GONE);
+        FrameLayout.LayoutParams rl = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.END);
+        rl.topMargin = dp(8);
+        rl.rightMargin = dp(14);
+        root.addView(bingRefresh, root.getChildCount() - 1, rl);
+
+        updateHolidayLine();
+        maybeRefreshBing(false);   // on boot / launcher start, if stale
+        maybeRefreshHolidays();
+    }
+
+    private void tintV30(int ink, boolean shadow) {
+        if (holidayLine == null) return;
+        float sr = shadow ? 5 * density : 0;
+        for (TextView t : new TextView[]{holidayLine, bingCredit}) {
+            t.setTextColor(ink);
+            t.setShadowLayer(sr, 0, sr > 0 ? density : 0, 0x66000000);
+        }
+        bingRefresh.setImageTintList(ColorStateList.valueOf(ink));
+    }
+
+    private void showBingCredit(boolean fromBing) {
+        if (bingCredit == null) return;
+        String c = prefs().getString(Bing.KEY_COPY, "");
+        bingCredit.setText(c);
+        bingCredit.setVisibility(fromBing && !c.isEmpty() ? View.VISIBLE : View.GONE);
+    }
+
+    /** The refresh button: one new pick right away (skipping the current photo), spinning while it downloads. */
+    private void refreshBingNow() {
+        if (!bingOn()) return;
+        maybeRefreshBing(true);
+    }
+
+    private void maybeRefreshBing(boolean force) {
+        if (!bingOn() || bingBusy || UNDER_TEST) return;
+        final boolean night = nightHours();
+        if (!force && !Bing.stale(this, prefs(), night)) return;
+        bingBusy = true;
+        setBingLoading(true);
+        final Context app = getApplicationContext();
+        final android.content.SharedPreferences p = prefs();
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                ok = Bing.refresh(app, p, night);
+            } catch (Throwable t) {
+                android.util.Log.w("Bing", "refresh failed", t);
+            }
+            final boolean changed = ok;
+            runOnUiThread(() -> {
+                bingBusy = false;
+                if (isFinishing() || isDestroyed()) return;
+                setBingLoading(false);
+                if (changed) loadWallpaper();
+            });
+        }).start();
+    }
+
+    private void setBingLoading(boolean on) {
+        if (bingRefresh == null) return;
+        bingRefresh.animate().cancel();
+        if (on) {
+            android.view.animation.RotateAnimation r = new android.view.animation.RotateAnimation(0, 360,
+                    android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
+            r.setDuration(900);
+            r.setRepeatCount(android.view.animation.Animation.INFINITE);
+            r.setInterpolator(new android.view.animation.LinearInterpolator());
+            bingRefresh.startAnimation(r);
+        } else {
+            bingRefresh.clearAnimation();
+        }
+        bingRefresh.setEnabled(!on);
+    }
+
+    private void maybeRefreshHolidays() {
+        final android.content.SharedPreferences p = prefs();
+        final int year = Calendar.getInstance().get(Calendar.YEAR);
+        final Context app = getApplicationContext();
+        new Thread(() -> {
+            final java.util.List<Holidays.Holiday> list = Holidays.load(app, p, java.time.LocalDate.now());
+            if (Holidays.stale(p) && !UNDER_TEST) Holidays.refresh(p, year);
+            final java.util.List<Holidays.Holiday> fresh = Holidays.load(app, p, java.time.LocalDate.now());
+            runOnUiThread(() -> {
+                holidays = fresh != null ? fresh : list;
+                updateHolidayLine();
+            });
+        }).start();
+    }
+
+    void updateHolidayLine() {
+        if (holidayLine == null) return;
+        String text = holidayPreviewText;
+        if (text == null && holidays != null) {
+            text = Holidays.line(holidays, holidayPreviewDate != null ? holidayPreviewDate : java.time.LocalDate.now());
+        }
+        holidayLine.setText(text == null ? "" : text);
+        holidayLine.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private void takeV30Extras(Intent intent) {
+        if (intent.getBooleanExtra(EXTRA_BING_REFRESH, false)) {
+            intent.removeExtra(EXTRA_BING_REFRESH);
+            if (holidayLine != null) maybeRefreshBing(true);
+        }
+        if (intent.hasExtra(EXTRA_HOLIDAY_DATE)) {
+            String d = intent.getStringExtra(EXTRA_HOLIDAY_DATE);
+            try {
+                holidayPreviewDate = d == null || d.isEmpty() ? null : java.time.LocalDate.parse(d.trim());
+            } catch (RuntimeException e) {
+                holidayPreviewDate = null;
+            }
+            updateHolidayLine();
+        }
+        if (intent.hasExtra(EXTRA_HOLIDAY_TEXT)) {
+            String t = intent.getStringExtra(EXTRA_HOLIDAY_TEXT);
+            holidayPreviewText = t == null || t.isEmpty() ? null : t;
+            updateHolidayLine();
+        }
+    }
 }

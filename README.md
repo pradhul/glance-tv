@@ -67,6 +67,12 @@ You can switch styles from the **Card style…** button in the launcher settings
 - **Scrolling app row (v27):** when apps overflow, the row fades softly only on a side with more apps, and the focused tile's scale, glow and shadow are never clipped.
 - **Wi-Fi (before v27):** the full network name with signal bars. HDMI devices show up as tiles named after the device (for example "Nintendo Switch"), and the launcher remembers the name for each port.
 
+### v30: daily Bing wallpaper and holiday line
+
+- **Daily Bing wallpaper** (launcher settings → *Daily Bing wallpaper*, on by default). The launcher fetches Bing's small JSON list (en-IN, 8 entries), checks each one's 64×36 thumbnail (about 1 KB) for brightness, and downloads **one** 1920×1080 photo: the brightest by day, the darkest by night (22:00–06:00), never the one already showing. Only that photo and its on-device -soft / -light / -blur copies are kept (in the app's files/bing); the previous set is deleted. A new pick comes at the morning and evening switch, and on start or boot when the stored one is stale. Cloudy or rainy weather still shows the bundled weather photos; offline or on failure the bundled photos are used. Bing's copyright line sits in tiny text at the bottom-right. The small ↻ icon at the top-right fetches the next pick at once (it spins while downloading).
+- **Holiday line** at the top-left: the next holiday and a countdown ("Deepavali · in 6 days", "· tomorrow", "Happy Deepavali" on the day). From a bundled list of national holidays and Karnataka festivals for 2026–2027 (`assets/holidays.json`) plus Nager.Date's India list, cached and refreshed weekly.
+- **Less blur:** the glass and floating background is now GaussianBlur(3) (was 6) and the posters background GaussianBlur(1.5) (was 2.5), for the bundled photos and the Bing photo alike; the frosted panels keep their heavy blur. The scrim behind the clock and the posters day dim are a little stronger to keep text readable.
+
 ### Debug ADB extras
 
 ```bash
@@ -77,6 +83,9 @@ adb shell am start -n com.minimaltv.home/.MainActivity --es forceFx mist        
 adb shell am start -n com.minimaltv.home/.MainActivity --ez openForecast true   # open the forecast panel
 adb shell am start -n com.minimaltv.home/.MainActivity --es previewApps a.b,c.d  # preview a dock list, never saved; 'none' ends it
 adb shell am start -n com.minimaltv.home/.MainActivity --ez openMore true       # open the ⋯ menu
+adb shell am start -n com.minimaltv.home/.MainActivity --ez bingRefresh true    # fetch the next Bing pick now (one download)
+adb shell am start -n com.minimaltv.home/.MainActivity --es holidayDate 2026-11-07   # holiday line as on that day; "" ends it
+adb shell am start -n com.minimaltv.home/.MainActivity --es holidayText "Happy Diwali"  # show any text there; "" ends it
 ```
 
 ### Install a build with ADB
