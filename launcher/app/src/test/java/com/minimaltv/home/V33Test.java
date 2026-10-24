@@ -111,7 +111,8 @@ public class V33Test {
         AllAppsActivity a = open();
         assertEquals("26.jpg", a.wallpaperShown);
         ImageView wp = a.findViewById(R.id.wallpaper);
-        assertFalse("glow must not be clipped by the grid", ((android.view.ViewGroup) a.findViewById(R.id.grid)).getClipChildren());
+        assertTrue("grid must clip: v34 clipChildren=false let the glow overflow and stole D-pad",
+                ((android.view.ViewGroup) a.findViewById(R.id.grid)).getClipChildren());
         assertNotNull(wp.getDrawable());
         assertNotNull(wp.getColorFilter());
     }

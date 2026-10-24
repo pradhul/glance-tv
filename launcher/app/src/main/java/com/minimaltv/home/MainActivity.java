@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
     private static final float FOCUS_SCALE = 1.08f;
     private static final float PILL_FOCUS_SCALE = 1.06f;
     private static final int REQUEST_PICK = 1;
-    private static final String PREFS = "dock";
+    private static final String PREFS = Looks.PREFS;
     private static final String KEY_APPS = "apps";
 
     private static final ViewOutlineProvider ROUNDED = new ViewOutlineProvider() {
@@ -282,8 +282,7 @@ public class MainActivity extends Activity {
 
     /** Day (06:00-22:00) or night set, by the clock alone (independent of the night-mode text setting). */
     private static boolean nightHours() {
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        return hour >= 22 || hour < 6;
+        return Looks.nightHours();
     }
 
     private String wallpaperWeather = "";
@@ -620,9 +619,10 @@ public class MainActivity extends Activity {
         if (style != STYLE_GLASS) {
             String sub = pkg.equals(prefs().getString(MediaListener.KEY_PKG, null))
                     ? prefs().getString(MediaListener.KEY_TITLE, null) : null;
-            View t = simpleIcons()
-                    ? styledTile(style, label, sub, Glyphs.forApp(this, pkg, label), null, true, Glyphs.brandColor(pkg))
-                    : styledTile(style, label, sub, info.loadIcon(pm), info.loadIcon(pm), false, 0);
+            boolean simple = simpleIcons();
+            View t = simple
+                    ? styledTile(style, label, sub, AppIcons.picture(this, pkg, label, null, true), null, true, Glyphs.brandColor(pkg))
+                    : styledTile(style, label, sub, AppIcons.picture(this, pkg, label, info.loadIcon(pm), false), info.loadIcon(pm), false, 0);
             t.setOnClickListener(v -> Apps.start(this, launch));
             t.setOnLongClickListener(v -> {
                 confirmRemove(pkg, label);
@@ -644,8 +644,8 @@ public class MainActivity extends Activity {
             hair.setStroke(Math.max(1, (int) density), 0x14221C17);
             tile.setForeground(hair);
         } else {
-            if (simpleIcons()) showPlain(tile, Glyphs.forApp(this, pkg, label), label, true);
-            else showPlain(tile, info.loadIcon(pm), label, false);
+            boolean simple = simpleIcons();
+            showPlain(tile, AppIcons.picture(this, pkg, label, info.loadIcon(pm), simple), label, simple);
         }
         tile.setOnClickListener(v -> Apps.start(this, launch));
         tile.setOnLongClickListener(v -> {
@@ -1332,9 +1332,7 @@ public class MainActivity extends Activity {
     // ---- v5: night mode --------------------------------------------------------------------------
 
     private boolean isNight() {
-        if (!getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_NIGHT, true)) return false;
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        return hour >= 22 || hour < 6;
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_NIGHT, true) && Looks.nightHours();
     }
 
     // ---- v5: weather -----------------------------------------------------------------------------
@@ -1385,7 +1383,7 @@ public class MainActivity extends Activity {
         try {
             ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
             label = String.valueOf(info.loadLabel(pm));
-            icon = simpleIcons() ? Glyphs.forApp(this, pkg, label) : Apps.mono(this, info.loadIcon(pm));
+            icon = AppIcons.picture(this, pkg, label, info.loadIcon(pm), simpleIcons());
         } catch (PackageManager.NameNotFoundException | RuntimeException e) {
             lastWatched.setVisibility(View.GONE);
             return;
@@ -1965,11 +1963,7 @@ public class MainActivity extends Activity {
         bp.topMargin = dp(40);
         tile.addView(box, bp);
         int haloColour = brand != 0 ? focusColour(brand) : dockPair.ink;
-        GradientDrawable haloShape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{(haloColour & 0x00FFFFFF) | 0x59000000, (haloColour & 0x00FFFFFF) | 0x1F000000, haloColour & 0x00FFFFFF});
-        haloShape.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        haloShape.setGradientRadius(dp(105));
-        haloShape.setShape(GradientDrawable.OVAL);
+        GradientDrawable haloShape = FocusGlow.halo(haloColour, dp(105));
         View halo = new View(this);
         halo.setBackground(haloShape);
         halo.setAlpha(0f);

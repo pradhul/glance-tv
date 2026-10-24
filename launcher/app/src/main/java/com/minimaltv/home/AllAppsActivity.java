@@ -42,8 +42,11 @@ public class AllAppsActivity extends Activity {
         if (pick) ((TextView) findViewById(R.id.title)).setText(R.string.add_to_home);
 
         grid = findViewById(R.id.grid);
+        // GridView must own D-pad: items are not focusable, children never steal keys.
+        grid.setFocusable(true);
+        grid.setFocusableInTouchMode(true);
+        grid.setClipChildren(true);
         loadWallpaper();
-        // v33: option C focus: a soft brand-colour glow behind the selected tile's icon.
         grid.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
@@ -81,15 +84,17 @@ public class AllAppsActivity extends Activity {
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 grid.setAdapter(new EntryAdapter(entries));
+                if (entries.size() > 0) grid.setSelection(0);
                 grid.requestFocus();
             });
-        }).start();
+        }, "all-apps").start();
     }
 
-    /** v33: the home screen's current photo (Bing or bundled), light blur, with home's 0x59000000 dim. */
+    /** The home screen's current photo (Bing or bundled), light blur, with home's dim. */
     private void loadWallpaper() {
         final ImageView wp = findViewById(R.id.wallpaper);
-        final String file = getSharedPreferences("dock", MODE_PRIVATE).getString(MainActivity.KEY_WALLPAPER_FILE, null);
+        final String file = getSharedPreferences(Looks.PREFS, MODE_PRIVATE)
+                .getString(MainActivity.KEY_WALLPAPER_FILE, null);
         if (wp == null || file == null) return;   // never shown home yet: stay black
         wp.setColorFilter(WALLPAPER_DIM, android.graphics.PorterDuff.Mode.SRC_ATOP);
         new Thread(() -> {
@@ -100,37 +105,23 @@ public class AllAppsActivity extends Activity {
                     wallpaperShown = file;
                 }
             });
-        }).start();
+        }, "all-apps-wp").start();
     }
 
-    static final int WALLPAPER_DIM = 0x59000000;
+    static final int WALLPAPER_DIM = Looks.WALLPAPER_DIM;
     String wallpaperShown;   // tests
     int glowPosition = -1;   // tests
 
     /** Glow drawable: radial brand colour fading to clear. */
     static android.graphics.drawable.GradientDrawable glow(int color, float radiusPx) {
-        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{(color & 0x00FFFFFF) | 0x99000000, (color & 0x00FFFFFF) | 0x44000000, color & 0x00FFFFFF});
-        g.setGradientType(android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT);
-        g.setGradientRadius(radiusPx);
-        g.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        return g;
+        return FocusGlow.drawable(color, radiusPx);
     }
 
-    static final long GLOW_IN_MS = 450, GLOW_OUT_MS = 250;
+    static final long GLOW_IN_MS = Looks.GLOW_IN_MS, GLOW_OUT_MS = Looks.GLOW_OUT_MS;
 
-    /** v34: grow and fade the glow in slowly instead of popping on. */
     private void fadeIn(View g, int pos, String pkg) {
-        g.setBackground(glow(Glyphs.glowColor(pkg), g.getLayoutParams().width / 2f));
-        g.setTag(pos);
-        g.animate().cancel();
-        g.setAlpha(0f);
-        g.setScaleX(0.5f);
-        g.setScaleY(0.5f);
-        g.setVisibility(View.VISIBLE);
-        g.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(GLOW_IN_MS)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f)).withEndAction(null).start();
+        g.setTag(R.id.tag_glow_pos, pos);
+        FocusGlow.fadeIn(g, Glyphs.glowColor(pkg), g.getLayoutParams().width / 2f);
     }
 
     private void showGlow(int position) {
@@ -141,16 +132,11 @@ public class AllAppsActivity extends Activity {
             if (g == null) continue;
             int pos = grid.getFirstVisiblePosition() + i;
             if (pos == glowPosition && glowPosition >= 0) {
-                if (Integer.valueOf(pos).equals(g.getTag())) continue;   // already glowing / fading in
+                if (Integer.valueOf(pos).equals(g.getTag(R.id.tag_glow_pos))) continue;
                 fadeIn(g, pos, ((Apps.Entry) grid.getItemAtPosition(pos)).pkg);
-            } else if (g.getTag() != null) {
-                g.setTag(null);
-                g.animate().cancel();
-                g.animate().alpha(0f).scaleX(0.85f).scaleY(0.85f).setDuration(GLOW_OUT_MS)
-                        .setInterpolator(new android.view.animation.AccelerateInterpolator())
-                        .withEndAction(() -> {
-                            if (g.getTag() == null) g.setVisibility(View.INVISIBLE);
-                        }).start();
+            } else if (g.getTag(R.id.tag_glow_pos) != null) {
+                g.setTag(R.id.tag_glow_pos, null);
+                FocusGlow.fadeOut(g);
             }
         }
     }
@@ -216,29 +202,19 @@ public class AllAppsActivity extends Activity {
                     ? convertView
                     : getLayoutInflater().inflate(R.layout.item_app, parent, false);
             Apps.Entry entry = entries.get(position);
-            ImageView icon = cell.findViewById(R.id.icon);
-            if (Glyphs.has(entry.pkg)) {   // v33: Arcticons / Simple Icons glyph in white, like the home row
-                android.graphics.drawable.Drawable d = Glyphs.forApp(AllAppsActivity.this, entry.pkg, entry.label);
-                d.setTint(0xFFFFFFFF);
-                icon.setImageDrawable(d);
-            } else {
-                icon.setImageDrawable(Apps.mono(AllAppsActivity.this, entry.icon));
-            }
+            AppIcons.bindAllApps(cell.findViewById(R.id.icon), AllAppsActivity.this, entry);
             View g = cell.findViewById(R.id.glow);
             if (g != null) {
                 boolean on = position == glowPosition;
-                boolean was = Integer.valueOf(position).equals(g.getTag());
-                boolean sameApp = Integer.valueOf(position).equals(cell.getTag());   // re-bound for the same app (layout pass)
-                cell.setTag(position);
+                boolean was = Integer.valueOf(position).equals(g.getTag(R.id.tag_glow_pos));
+                boolean sameApp = Integer.valueOf(position).equals(cell.getTag(R.id.tag_cell_pos));
+                cell.setTag(R.id.tag_cell_pos, position);
                 if (on && !was) {
                     fadeIn(g, position, entry.pkg);
                 } else if (!on && sameApp) {
                     // leave it: a fade-out may be running
-                } else if (!on && g.getTag() != null) {   // recycled from another app: hide at once
-                    g.animate().cancel();
-                    g.setTag(null);
-                    g.setAlpha(0f);
-                    g.setVisibility(View.INVISIBLE);
+                } else if (!on && g.getTag(R.id.tag_glow_pos) != null) {
+                    FocusGlow.hideNow(g);
                 } else if (!on) {
                     g.setVisibility(View.INVISIBLE);
                 }

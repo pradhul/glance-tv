@@ -40,7 +40,7 @@ final class Apps {
     static final String KEY_HIDDEN = "hidden_apps";
 
     static java.util.Set<String> hidden(Context c) {
-        String saved = c.getSharedPreferences("dock", Context.MODE_PRIVATE).getString(KEY_HIDDEN, "");
+        String saved = c.getSharedPreferences(Looks.PREFS, Context.MODE_PRIVATE).getString(KEY_HIDDEN, "");
         java.util.Set<String> set = new java.util.TreeSet<>();
         for (String p : saved.split(",")) if (!p.trim().isEmpty()) set.add(p.trim());
         return set;
@@ -49,7 +49,7 @@ final class Apps {
     static void setHidden(Context c, String pkg, boolean hide) {
         java.util.Set<String> set = hidden(c);
         if (hide) set.add(pkg); else set.remove(pkg);
-        c.getSharedPreferences("dock", Context.MODE_PRIVATE).edit()
+        c.getSharedPreferences(Looks.PREFS, Context.MODE_PRIVATE).edit()
                 .putString(KEY_HIDDEN, android.text.TextUtils.join(",", set)).apply();
     }
 
