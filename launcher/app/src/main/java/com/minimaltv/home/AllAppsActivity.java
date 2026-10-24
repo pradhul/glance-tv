@@ -90,25 +90,27 @@ public class AllAppsActivity extends Activity {
         }, "all-apps").start();
     }
 
-    /** The home screen's current photo (Bing or bundled), light blur, with home's dim. */
+    /** v38: the home screen's current photo (Bing or bundled), heavily blurred under a darker scrim; fades in. */
     private void loadWallpaper() {
         final ImageView wp = findViewById(R.id.wallpaper);
         final String file = getSharedPreferences(Looks.PREFS, MODE_PRIVATE)
                 .getString(MainActivity.KEY_WALLPAPER_FILE, null);
         if (wp == null || file == null) return;   // never shown home yet: stay black
-        wp.setColorFilter(WALLPAPER_DIM, android.graphics.PorterDuff.Mode.SRC_ATOP);
+        wp.setColorFilter(WALLPAPER_SCRIM, android.graphics.PorterDuff.Mode.SRC_ATOP);
+        wp.setAlpha(0f);
         new Thread(() -> {
-            final android.graphics.Bitmap b = Wallpapers.background(this, file, true);
+            final android.graphics.Bitmap b = Wallpapers.heavyBlur(this, file);
             runOnUiThread(() -> {
                 if (!isFinishing() && !isDestroyed() && b != null) {
                     wp.setImageBitmap(b);
+                    wp.animate().alpha(1f).setDuration(Looks.WALLPAPER_FADE_MS).start();
                     wallpaperShown = file;
                 }
             });
         }, "all-apps-wp").start();
     }
 
-    static final int WALLPAPER_DIM = Looks.WALLPAPER_DIM;
+    static final int WALLPAPER_SCRIM = Looks.ALL_APPS_SCRIM;
     String wallpaperShown;   // tests
     int glowPosition = -1;   // tests
 

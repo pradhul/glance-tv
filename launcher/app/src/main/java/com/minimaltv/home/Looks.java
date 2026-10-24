@@ -13,6 +13,12 @@ final class Looks {
     /** Home and All apps dim the current photo with the same scrim. */
     static final int WALLPAPER_DIM = 0x59000000;
 
+    /** v38: All apps uses the heavy "-blur" copy of the photo under a ~50% black scrim so line icons read. */
+    static final int ALL_APPS_SCRIM = 0x80000000;
+
+    /** v38: All apps' wallpaper fades in with the screen. */
+    static final long WALLPAPER_FADE_MS = 300;
+
     static final long GLOW_IN_MS = 450;
     static final long GLOW_OUT_MS = 250;
 

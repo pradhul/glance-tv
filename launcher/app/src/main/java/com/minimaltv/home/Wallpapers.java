@@ -107,6 +107,17 @@ final class Wallpapers {
         return b;
     }
 
+    /**
+     * v38: the heavily blurred half-size "-blur" copy (All apps backdrop; home keeps its light blur), falling back
+     * to the soft background when no -blur copy exists.
+     */
+    static Bitmap heavyBlur(Context context, String file) {
+        String name = file.replace(".jpg", "-blur.jpg");
+        java.io.File d = new java.io.File(context.getFilesDir(), Bing.DIR);
+        Bitmap b = new java.io.File(d, file).exists() ? decodeFile(new java.io.File(d, name)) : decode(context.getAssets(), name);
+        return b != null ? b : background(context, file, false);
+    }
+
     static Bitmap background(Context context, String file, boolean light) {
         java.io.File d = new java.io.File(context.getFilesDir(), Bing.DIR);
         if (new java.io.File(d, file).exists()) {   // v30: the Bing photo and its generated variants

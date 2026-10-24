@@ -40,7 +40,7 @@ public class V35HelpersTest {
     public void looks_glowTimingsMatchAllAppsAliases() {
         assertEquals(Looks.GLOW_IN_MS, AllAppsActivity.GLOW_IN_MS);
         assertEquals(Looks.GLOW_OUT_MS, AllAppsActivity.GLOW_OUT_MS);
-        assertEquals(Looks.WALLPAPER_DIM, AllAppsActivity.WALLPAPER_DIM);
+        assertEquals(Looks.ALL_APPS_SCRIM, AllAppsActivity.WALLPAPER_SCRIM);
         assertTrue(Looks.GLOW_IN_MS >= 400 && Looks.GLOW_OUT_MS >= 200);
         assertEquals("dock", Looks.PREFS);
     }

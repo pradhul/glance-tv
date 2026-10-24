@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:background="@color/bg">
 
-    <!-- v33: the home screen's photo (light blur, 0x59000000 dim) behind the grid. -->
+    <!-- v38: the home screen's photo, heavy blur under Looks.ALL_APPS_SCRIM behind the grid. -->
     <ImageView
         android:id="@+id/wallpaper"
         android:layout_width="match_parent"
