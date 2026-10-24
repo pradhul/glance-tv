@@ -64,14 +64,14 @@ final class Wallpapers {
      * shown last when there is a choice, and decodes it. Null when the assets are missing. Call off the main thread.
      */
     static Loaded pickAndLoad(Context context, boolean night, String forced) {
-        return pickAndLoad(context, night, "", forced);
+        return pickAndLoad(context, night, "", false, forced);
     }
 
     /**
      * v25: weather is "" (normal sets), "cloudy" or "rain": the matching day/night weather set when it has photos,
      * else the normal set for that time of day.
      */
-    static Loaded pickAndLoad(Context context, boolean night, String weather, String forced) {
+    static Loaded pickAndLoad(Context context, boolean night, String weather, boolean light, String forced) {
         AssetManager assets = context.getAssets();
         Theme[] all = readThemes(assets);
         if (all.length == 0) return null;
@@ -80,9 +80,7 @@ final class Wallpapers {
         Theme theme = set.get(new Random().nextInt(set.size()));
         if (forced != null) for (Theme t : all) if (t.file.equals(forced)) theme = t;
         lastFile = theme.file;
-        // The background is the lightly blurred "-soft" copy (pre-made: no per-frame cost on the TV).
-        Bitmap sharp = decode(assets, theme.file.replace(".jpg", "-soft.jpg"));
-        if (sharp == null) sharp = decode(assets, theme.file);
+        Bitmap sharp = background(assets, theme.file, light);
         if (sharp == null) return null;
         Bitmap blurred = decode(assets, theme.file.replace(".jpg", "-blur.jpg"));
         return new Loaded(theme, sharp, blurred);
@@ -96,6 +94,21 @@ final class Wallpapers {
         if (set.isEmpty()) for (Theme t : all) if (t.night == night && t.weather.isEmpty()) set.add(t);
         if (set.isEmpty()) java.util.Collections.addAll(set, all);
         return set;
+    }
+
+    /**
+     * The background bitmap: the lightly blurred "-soft" copy (pre-made: no per-frame cost on the TV), or with
+     * light (v26, tall posters) the even lighter "-light" copy; each falls back to the next, then the original.
+     */
+    static Bitmap background(AssetManager assets, String file, boolean light) {
+        Bitmap b = light ? decode(assets, file.replace(".jpg", "-light.jpg")) : null;
+        if (b == null) b = decode(assets, file.replace(".jpg", "-soft.jpg"));
+        if (b == null) b = decode(assets, file);
+        return b;
+    }
+
+    static Bitmap background(Context context, String file, boolean light) {
+        return background(context.getAssets(), file, light);
     }
 
     static Theme[] readThemes(AssetManager assets) {

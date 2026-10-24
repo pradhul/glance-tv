@@ -299,14 +299,17 @@ public class MainActivity extends Activity {
         wallpaperWeather = sky;
         final String forced = prefs().getString(KEY_FORCED_WP, null);
         wallpaperBusy = true;
+        final boolean light = cardStyle() == STYLE_POSTERS;
         new Thread(() -> {
-            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, sky, forced);
+            final Wallpapers.Loaded loaded = Wallpapers.pickAndLoad(this, night, sky, light, forced);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || loaded == null) return;
                 blurred = loaded.blurred;
                 wallpaperLum = loaded.theme.luminance;
                 rowLum = rowLuminance(loaded.blurred != null ? loaded.blurred : loaded.sharp);
                 wallpaperView.setImageBitmap(loaded.sharp);
+                wallpaperFile = loaded.theme.file;
+                wallpaperLight = light;
                 applyTheme(loaded.theme.topDark, loaded.theme.pillsDark, loaded.theme.dockDark);
                 // v25: the photo can now change mid-session (the weather turned): keep the focused tile focused.
                 rebuildKeepingFocus();
@@ -336,6 +339,9 @@ public class MainActivity extends Activity {
             dockPair.ink = NIGHT_INK;
             // Already-dark photos (the night set) need less: ~35% instead of ~55%.
             wallpaperView.setColorFilter(wallpaperLum < 0.45f ? 0x59000000 : 0x8C000000, android.graphics.PorterDuff.Mode.SRC_ATOP);
+        } else if (cardStyle() == STYLE_POSTERS) {
+            // v26: posters show the lighter-blurred photo; a slight daytime dim keeps the clock readable.
+            wallpaperView.setColorFilter(POSTERS_DAY_DIM, android.graphics.PorterDuff.Mode.SRC_ATOP);
         } else {
             wallpaperView.clearColorFilter();
         }
@@ -1629,6 +1635,7 @@ public class MainActivity extends Activity {
     /** Glass shows the analog clock (greeting, date and weather below it); the other styles the digital one. */
     private void updateClockStyle() {
         if (analog == null) return;
+        swapWallpaperBlur();
         applyLayout();
         boolean glass = cardStyle() == STYLE_GLASS;
         analog.setVisibility(glass ? View.VISIBLE : View.GONE);
@@ -2297,4 +2304,29 @@ public class MainActivity extends Activity {
         if (bt == null || btRow == null) return;
         showBtStates(bt.states());
     }
+
+    // ---- v26: lighter wallpaper blur in tall posters --------------------------------------------------------
+
+    static final int POSTERS_DAY_DIM = 0x1F000000;   // ~12% black, posters by day only
+    String wallpaperFile;
+    boolean wallpaperLight;
+
+    /** Style switched (menu, auto-switch or --es style): swap to the -light / -soft copy of the same photo, no relaunch. */
+    private void swapWallpaperBlur() {
+        final boolean light = cardStyle() == STYLE_POSTERS;
+        if (wallpaperFile != null && light != wallpaperLight) {
+            final String file = wallpaperFile;
+            wallpaperLight = light;
+            wallpaperBusy = true;
+            new Thread(() -> {
+                final Bitmap b = Wallpapers.background(this, file, light);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed() && b != null && file.equals(wallpaperFile)) wallpaperView.setImageBitmap(b);
+                });
+                wallpaperBusy = false;
+            }).start();
+        }
+        if (top != null) applyTheme(themeTop, themePills, themeDock);   // the posters day dim on or off
+    }
 }
+

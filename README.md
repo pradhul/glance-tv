@@ -56,6 +56,7 @@ You can switch styles from the **Card style…** button in the launcher settings
 ### Home screen extras
 
 - **Wallpapers:** separate day and night sets of real photos, chosen by the time of day (06:00–22:00 is day). Each photo has a pre-blurred copy that the frosted panels use.
+- **Tall posters, lighter blur (v26):** the posters style shows a lighter-blurred copy of the photo (`-light.jpg`, Gaussian 2.5 vs 6 for `-soft.jpg`) with a slight dim by day; switching styles swaps it straight away.
 - **Weather wallpapers (v25):** overcast skies switch to a cloudy set, rain or drizzle to a rainy set, each with day and night photos (Unsplash, Unsplash License; sources in `themes.json`). Other weather uses the normal sets. Checked with every weather refresh.
 - **Weather:** the current temperature and conditions from [Open-Meteo](https://open-meteo.com), which needs no API key. It refreshes every 30 minutes and the last answer is cached, so a restart shows it at once.
 - **Forecast + air quality (v25):** the weather line beside the clock can be focused with the remote; focus or OK opens a panel with the next 6 hours (temperature, rain chance) and the current US AQI with PM2.5 and a colour label (Open-Meteo air-quality API). Back closes it.

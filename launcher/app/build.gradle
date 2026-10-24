@@ -10,8 +10,8 @@ android {
         applicationId 'com.minimaltv.home'
         minSdk 26
         targetSdk 34
-        versionCode 25
-        versionName '25'
+        versionCode 26
+        versionName '26'
     }
 
     buildTypes {

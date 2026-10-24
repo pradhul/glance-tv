@@ -869,4 +869,47 @@ public class DpadNavigationTest {
         withWeather(Weather.fake(28, 0, true, 40, 5));
         assertEquals("", field(activity, "wallpaperWeather"));
     }
+
+    void waitWallpaper() {
+        settle();
+        for (int k = 0; k < 60 && activity.wallpaperBusy; k++) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException ignored) {
+            }
+        }
+        settle();
+    }
+
+    @Test
+    public void posters_lighterBlur_swapsWithStyle_noRelaunch() {
+        android.content.res.AssetManager am = ApplicationProvider.getApplicationContext().getAssets();
+        for (Wallpapers.Theme t : Wallpapers.readThemes(am)) {
+            try {
+                am.open("wallpapers/" + t.file.replace(".jpg", "-light.jpg")).close();
+            } catch (java.io.IOException e) {
+                fail("missing -light copy for " + t.file);
+            }
+        }
+        launch("glass", null);
+        waitWallpaper();
+        assertNotNull(activity.wallpaperFile);
+        assertFalse(activity.wallpaperLight);
+        android.widget.ImageView wp = activity.findViewById(R.id.wallpaper);
+        android.graphics.drawable.Drawable before = wp.getDrawable();
+        MainActivity same = activity;
+        controller.newIntent(new Intent().putExtra("style", "posters"));
+        waitWallpaper();
+        assertSame("relaunched", same, activity);
+        assertTrue(activity.wallpaperLight);
+        assertNotSame("bitmap not swapped", before, wp.getDrawable());
+        boolean night = (boolean) field(activity, "nightApplied");
+        if (!night) assertNotNull("posters day dim", wp.getColorFilter());
+        shot("posters-light-blur");
+        controller.newIntent(new Intent().putExtra("style", "glass"));
+        waitWallpaper();
+        assertFalse(activity.wallpaperLight);
+        if (!night) assertNull("glass unchanged: no dim", wp.getColorFilter());
+    }
 }
+
