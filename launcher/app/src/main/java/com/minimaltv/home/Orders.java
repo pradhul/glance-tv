@@ -57,7 +57,8 @@ final class Orders {
     }
 
     static final String KEY_URL = "orders_url";
-    static final String DEFAULT_URL = "https://gist.githubusercontent.com/pradhul/fc391fa36ebf4170e54e2080a3f93866/raw/orders.json";
+    /** v39: no built-in feed; empty = orders feature off until a URL is set (e.g. via the ordersUrl extra). */
+    static final String DEFAULT_URL = "";
     static final String KEY_CACHE = "orders_json";
     /** v37: optional endpoint POSTed before a manual refresh (e.g. a workflow_dispatch proxy). Empty = off. */
     static final String KEY_REFRESH_URL = "orders_refresh_url";
@@ -66,6 +67,8 @@ final class Orders {
     static final String ICON_SLOT = "\uFFFC";
     static final int MAX_LABEL = 18;
     static final String EXTRA_URL = "ordersUrl";
+    /** v39: sets {@link #KEY_REFRESH_URL}; an empty value clears it. */
+    static final String EXTRA_REFRESH_URL = "ordersRefreshUrl";
     static final String EXTRA_JSON = "ordersJson";
     static final long POLL_MS = 10 * 60_000L;
     static final Duration STALE_AFTER = Duration.ofHours(24);

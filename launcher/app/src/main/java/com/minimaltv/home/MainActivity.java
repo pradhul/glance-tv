@@ -2809,6 +2809,11 @@ public class MainActivity extends Activity {
             prefs().edit().putString(Orders.KEY_URL, Orders.url(intent.getStringExtra(Orders.EXTRA_URL))).apply();
             intent.removeExtra(Orders.EXTRA_URL);
         }
+        if (intent.hasExtra(Orders.EXTRA_REFRESH_URL)) {
+            prefs().edit().putString(Orders.KEY_REFRESH_URL,
+                    Orders.url(intent.getStringExtra(Orders.EXTRA_REFRESH_URL))).apply();
+            intent.removeExtra(Orders.EXTRA_REFRESH_URL);
+        }
         if (intent.hasExtra(Orders.EXTRA_JSON)) {
             ordersPreviewJson = intent.getStringExtra(Orders.EXTRA_JSON);
             if (Orders.parse(ordersPreviewJson) != null) Orders.saveCache(prefs(), ordersPreviewJson);

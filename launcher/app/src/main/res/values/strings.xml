@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TV Home</string>
+    <string name="app_name">Glance TV</string>
     <string name="good_morning">Good morning</string>
     <string name="good_afternoon">Good afternoon</string>
     <string name="good_evening">Good evening</string>
@@ -31,7 +31,7 @@
     <string name="hdmi_n">HDMI %1$d</string>
     <string name="sleep_off">Sleep off</string>
     <string name="sleep_min">Sleep %1$d min</string>
-    <string name="sleep_service_desc">Lets TV Home put the TV to sleep when its sleep timer runs out. It reads nothing on screen.</string>
+    <string name="sleep_service_desc">Lets Glance TV put the TV to sleep when its sleep timer runs out. It reads nothing on screen.</string>
     <string name="launcher_settings">TV Home</string>
     <string name="pref_auto_hdmi">Switch to an HDMI device when it turns on</string>
     <string name="pref_night">Night mode (22:00 to 06:00)</string>

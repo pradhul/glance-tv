@@ -207,4 +207,19 @@ public class V36OrdersTest {
                 a.getSharedPreferences(Looks.PREFS, Context.MODE_PRIVATE).getString(Orders.KEY_URL, ""));
         a.finish();
     }
+
+    @Test
+    public void defaultUrl_isEmpty_featureOff() {
+        assertEquals("", Orders.DEFAULT_URL);
+        assertEquals("", Orders.url(Orders.DEFAULT_URL));
+    }
+
+    @Test
+    public void ordersRefreshUrlExtra_persistsPref() {
+        Intent extra = new Intent().putExtra(Orders.EXTRA_REFRESH_URL, "https://example.test/dispatch");
+        MainActivity a = launch("glass", extra);
+        assertEquals("https://example.test/dispatch",
+                a.getSharedPreferences(Looks.PREFS, Context.MODE_PRIVATE).getString(Orders.KEY_REFRESH_URL, ""));
+        a.finish();
+    }
 }

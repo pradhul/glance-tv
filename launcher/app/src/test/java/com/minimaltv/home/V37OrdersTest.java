@@ -110,6 +110,7 @@ public class V37OrdersTest {
     public void home_boxIconAndRefreshButton_onlyWithOrders() {
         String payload = V36OrdersTest.json(FRESH, order("Flipkart", "Air Mouse", "ordered", "2026-10-29"));
         MainActivity a = launch(new Intent()
+                .putExtra(Orders.EXTRA_URL, "https://example.test/o.json")   // v39: no default URL
                 .putExtra(Orders.EXTRA_JSON, payload)
                 .putExtra(MainActivity.EXTRA_HOLIDAY_TEXT, "Kannada Rajyotsava · in 7 days"));
         CharSequence text = a.holidayLine.getText();
