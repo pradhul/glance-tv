@@ -61,8 +61,8 @@ public class V40OrdersStripTest {
 
     @Test
     public void storeIconMapping() {
-        assertTrue(Orders.storeIcon("Amazon") != 0);
-        assertTrue(Orders.storeIcon("amazon.in") != 0);
+        assertEquals(0, Orders.storeIcon("Amazon"));
+        assertEquals(0, Orders.storeIcon("Flipkart"));
         assertEquals(0, Orders.storeIcon("Myntra"));
         assertEquals(0, Orders.storeIcon(null));
     }
@@ -89,7 +89,8 @@ public class V40OrdersStripTest {
             View b = strip.getChildAt(i).findViewWithTag("store_badge");
             if (b instanceof TextView && "Flipkart".contentEquals(((TextView) b).getText())) sawText = true;
         }
-        assertTrue(badge instanceof ImageView || badge instanceof TextView);
+        assertTrue(badge instanceof TextView);
+        assertEquals("Amazon", ((TextView) badge).getText().toString());
         assertTrue(sawText);
         OrdersStrip.bind(strip, Orders.cards(null, LocalDate.parse("2026-10-25"), Instant.now()));
         assertEquals(View.GONE, strip.getVisibility());

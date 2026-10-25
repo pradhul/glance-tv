@@ -247,10 +247,8 @@ final class Orders {
         return STEP_COLORS[Math.max(0, Math.min(3, step))];
     }
 
-    /** v40: the store's logo from the icon pack, or 0 when there is none (caller shows the store name instead). */
+    /** v41: no store logos in the icon pack; always 0 so every badge shows the store name in small text. */
     static int storeIcon(String store) {
-        String s = store == null ? "" : store.trim().toLowerCase(Locale.ROOT);
-        if (s.startsWith("amazon")) return R.drawable.ic_app_arc_amazon_prime_video;
         return 0;
     }
 
