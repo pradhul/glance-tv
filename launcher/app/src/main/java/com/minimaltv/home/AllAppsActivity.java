@@ -124,29 +124,131 @@ public class AllAppsActivity extends Activity {
         column.setVisibility(show ? View.VISIBLE : View.GONE);
         grid.setNumColumns(show ? 5 : 6);
         final View scroll = findViewById(R.id.orders_scroll);
-        final TextView header = findViewById(R.id.orders_header);
-        scroll.setOnFocusChangeListener((v, has) -> header.setTextColor(has ? 0xFF8AB4FF : getColor(R.color.text)));
+        final android.graphics.drawable.GradientDrawable ring = new android.graphics.drawable.GradientDrawable();
+        ring.setCornerRadius(12 * getResources().getDisplayMetrics().density);
+        ring.setColor(0);
+        scroll.setBackground(ring);
+        scroll.setOnFocusChangeListener((v, has) ->
+                ring.setStroke(has ? Math.round(2 * getResources().getDisplayMetrics().density) : 0, 0x99FFFFFF));
+        final ImageView refresh = findViewById(R.id.orders_refresh);
+        final android.graphics.drawable.GradientDrawable dot = new android.graphics.drawable.GradientDrawable();
+        dot.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        dot.setColor(0);
+        refresh.setBackground(dot);
+        refresh.setOnFocusChangeListener((v, f) -> {
+            dot.setColor(f ? 0x40FFFFFF : 0);
+            if (ordersState == MainActivity.BING_IDLE) v.setAlpha(f ? 1f : 0.6f);
+            v.animate().scaleX(f ? 1.2f : 1f).scaleY(f ? 1.2f : 1f).setDuration(120).start();
+        });
+        refresh.setOnClickListener(v -> refreshOrders());
+        setOrdersState(MainActivity.BING_IDLE);
+    }
+
+    int ordersState = MainActivity.BING_IDLE;   // tests
+    int ordersRefreshes;   // tests
+    private boolean ordersBusy;
+    private final Runnable ordersBackToIdle = () -> setOrdersState(MainActivity.BING_IDLE);
+
+    /** v43: same feedback as the home screen button: spin while loading, then a green tick or red cross. */
+    void setOrdersState(int state) {
+        ordersState = state;
+        ImageView b = findViewById(R.id.orders_refresh);
+        if (b == null) return;
+        b.removeCallbacks(ordersBackToIdle);
+        if (state == MainActivity.BING_LOADING) {
+            android.view.animation.RotateAnimation r = new android.view.animation.RotateAnimation(0, 360,
+                    android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f);
+            r.setDuration(900);
+            r.setRepeatCount(android.view.animation.Animation.INFINITE);
+            r.setInterpolator(new android.view.animation.LinearInterpolator());
+            b.startAnimation(r);
+        } else {
+            b.clearAnimation();
+        }
+        int icon = state == MainActivity.BING_OK ? R.drawable.ic_check
+                : state == MainActivity.BING_FAILED ? R.drawable.ic_cross : R.drawable.ic_refresh;
+        int tint = state == MainActivity.BING_OK ? 0xFF4CD964 : state == MainActivity.BING_FAILED ? 0xFFFF453A : 0xFFFFFFFF;
+        b.setImageResource(icon);
+        b.setImageTintList(android.content.res.ColorStateList.valueOf(tint));
+        b.setAlpha(state == MainActivity.BING_IDLE && !b.isFocused() ? 0.6f : 1f);
+        if (state == MainActivity.BING_OK) b.postDelayed(ordersBackToIdle, 1800);
+        if (state == MainActivity.BING_FAILED) b.postDelayed(ordersBackToIdle, 2000);
+    }
+
+    /** v43: POST the optional refresh URL, wait, then re-fetch the orders JSON past the CDN and rebuild the column. */
+    void refreshOrders() {
+        final android.content.SharedPreferences p = getSharedPreferences(Looks.PREFS, MODE_PRIVATE);
+        final String url = Orders.url(p.getString(Orders.KEY_URL, Orders.DEFAULT_URL));
+        if (url.isEmpty() || ordersBusy) return;
+        final String trigger = Orders.url(p.getString(Orders.KEY_REFRESH_URL, ""));
+        ordersBusy = true;
+        ordersRefreshes++;
+        setOrdersState(MainActivity.BING_LOADING);
+        if (MainActivity.UNDER_TEST) return;   // no network in tests
+        new Thread(() -> {
+            String body = null;
+            try {
+                if (!trigger.isEmpty()) {
+                    Orders.post(trigger);
+                    Thread.sleep(Orders.TRIGGER_WAIT_MS);
+                }
+                body = Orders.fetch(Orders.bust(url, System.currentTimeMillis()));
+            } catch (Throwable ignored) {
+            }
+            final String json = body;
+            runOnUiThread(() -> {
+                ordersBusy = false;
+                if (isFinishing() || isDestroyed()) return;
+                boolean ok = Orders.parse(json) != null;
+                if (ok) {
+                    Orders.saveCache(p, json);
+                    bindOrdersKeepFocus();
+                }
+                setOrdersState(ok ? MainActivity.BING_OK : MainActivity.BING_FAILED);
+            });
+        }, "all-apps-orders").start();
+    }
+
+    private void bindOrdersKeepFocus() {
+        android.widget.LinearLayout strip = findViewById(R.id.orders_strip);
+        android.content.SharedPreferences p = getSharedPreferences(Looks.PREFS, MODE_PRIVATE);
+        List<Orders.Order> cards = Orders.cards(Orders.parse(Orders.cached(p)), Orders.today(), Orders.now());
+        OrdersStrip.bind(strip, cards);
+        strip.setVisibility(View.VISIBLE);   // keep the column (and the focused button) even if it emptied
     }
 
     /**
-     * v42: RIGHT on the grid's last column (or last app) moves focus to the orders column, where UP/DOWN scroll it;
-     * LEFT (or Back) returns to the grid.
+     * v42/v43: RIGHT on the grid's last column (or last app) focuses the orders refresh button; DOWN from it enters
+     * the list (UP/DOWN scroll it, UP at the top goes back to the button); LEFT or Back returns to the grid.
      */
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent e) {
         View column = findViewById(R.id.orders_column);
         View scroll = findViewById(R.id.orders_scroll);
+        View refresh = findViewById(R.id.orders_refresh);
         if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && column != null && column.getVisibility() == View.VISIBLE) {
             int k = e.getKeyCode();
             if (k == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && grid.hasFocus() && grid.getAdapter() != null) {
                 int pos = grid.getSelectedItemPosition();
                 int cols = grid.getNumColumns();
                 if (pos >= 0 && (pos % cols == cols - 1 || pos == grid.getAdapter().getCount() - 1)) {
-                    scroll.requestFocus();
+                    refresh.requestFocus();
                     return true;
                 }
             }
-            if ((k == android.view.KeyEvent.KEYCODE_DPAD_LEFT || k == android.view.KeyEvent.KEYCODE_BACK) && scroll.hasFocus()) {
+            if (k == android.view.KeyEvent.KEYCODE_DPAD_DOWN && refresh.hasFocus()) {
+                scroll.requestFocus();
+                return true;
+            }
+            if (k == android.view.KeyEvent.KEYCODE_DPAD_UP && scroll.hasFocus() && scroll.getScrollY() == 0) {
+                refresh.requestFocus();
+                return true;
+            }
+            if ((k == android.view.KeyEvent.KEYCODE_DPAD_UP || k == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) && refresh.hasFocus()) {
+                return true;   // stay on the button
+            }
+            if ((k == android.view.KeyEvent.KEYCODE_DPAD_LEFT || k == android.view.KeyEvent.KEYCODE_BACK)
+                    && (scroll.hasFocus() || refresh.hasFocus())) {
                 grid.requestFocus();
                 return true;
             }

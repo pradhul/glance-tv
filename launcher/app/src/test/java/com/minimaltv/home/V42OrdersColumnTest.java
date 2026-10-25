@@ -118,7 +118,19 @@ public class V42OrdersColumnTest {
         g.requestFocus();
         g.setSelection(4);   // last column of row 1
         a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT));
-        assertTrue(scroll.hasFocus());
+        View refresh = a.findViewById(R.id.orders_refresh);
+        assertTrue("Right from grid lands on refresh", refresh.hasFocus());
+        org.junit.Assert.assertFalse(a.findViewById(R.id.orders_header).isFocusable());
+        refresh.performClick();
+        assertEquals(1, a.ordersRefreshes);
+        assertEquals(MainActivity.BING_LOADING, a.ordersState);
+        a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN));
+        assertTrue("Down enters the list", scroll.hasFocus());
+        a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_UP));
+        assertTrue("Up at top returns to refresh", refresh.hasFocus());
+        a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT));
+        assertTrue(g.hasFocus());
+        scroll.requestFocus();
         a.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT));
         assertTrue(g.hasFocus());
     }

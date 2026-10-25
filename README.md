@@ -21,7 +21,7 @@ More: [Floating icons](docs/screenshots/floating-icons-rain.png) · [Glass tiles
 - **Wi-Fi signal icon**, HDMI input tiles that use the real HDMI-CEC device names, plus auto-jump to HDMI.
 - **Next-holiday countdown** on the top-left status line (bundled 2026–27 list, refreshed weekly from Nager.Date).
 - **Orders status line**: upcoming deliveries (item + date, box icon) from a JSON URL you choose, with a refresh button and an optional refresh trigger URL. Data older than 24 h is ignored.
-- **Orders column in All apps**: a scrollable column on the right with every order (out for delivery first, then by date): product photo, item, store · date and an Ordered → Shipped → Out → Delivered progress bar (optional `image` URL in the orders JSON). Press Right from the last grid column to scroll it, Left to go back.
+- **Orders column in All apps**: a scrollable column on the right with every order (out for delivery first, then by date): product photo, item, store · date and an Ordered → Shipped → Out → Delivered progress bar (optional `image` URL in the orders JSON). Press Right from the last grid column to reach its refresh button, Down to scroll the list, Left to go back.
 - **Arcticons line icons** for popular streaming apps, and brand colours on focus.
 - **All apps grid** with a soft brand-colour glow on the focused app, wallpaper backdrop with heavier blur and a 50% scrim.
 - **Hidden apps**: long-press or Menu → Hide on a tile, then ⋯ → Hidden apps to bring them back.
