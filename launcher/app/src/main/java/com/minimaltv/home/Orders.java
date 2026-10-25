@@ -255,14 +255,14 @@ final class Orders {
     /** v40: {@code due Mon 26 Oct} (out for delivery) or {@code by Thu 29 Oct}; null when there is no eta. */
     static String cardDate(Order o) {
         if (o.eta == null) return null;
+        if (!o.eta.isAfter(today())) return "today";
         return (o.outForDelivery() || step(o.status) == 0 ? "due " : "by ") + ETA.format(o.eta);
     }
 
     /** v40: the cards for the All apps strip; empty (strip hidden) when stale or nothing to show. */
     static List<Order> cards(Snapshot s, LocalDate today, Instant now) {
         if (stale(s, now)) return new ArrayList<>();
-        List<Order> vis = visible(s, today);
-        return vis.size() > MAX_SHOWN ? new ArrayList<>(vis.subList(0, MAX_SHOWN)) : vis;
+        return visible(s, today);   // v42: no limit; out for delivery first, then by eta
     }
 
     static String cached(SharedPreferences prefs) {

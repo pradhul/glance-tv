@@ -114,10 +114,44 @@ public class AllAppsActivity extends Activity {
     /** v40: orders strip from the same cached orders JSON the home screen uses (only when a URL is set). */
     private void bindOrders() {
         android.widget.LinearLayout strip = findViewById(R.id.orders_strip);
-        if (strip == null) return;
+        View column = findViewById(R.id.orders_column);
+        if (strip == null || column == null) return;
         android.content.SharedPreferences p = getSharedPreferences(Looks.PREFS, MODE_PRIVATE);
         String json = Orders.url(p.getString(Orders.KEY_URL, Orders.DEFAULT_URL)).isEmpty() ? null : Orders.cached(p);
-        OrdersStrip.bind(strip, Orders.cards(Orders.parse(json), Orders.today(), Orders.now()));
+        List<Orders.Order> cards = Orders.cards(Orders.parse(json), Orders.today(), Orders.now());
+        OrdersStrip.bind(strip, cards);
+        boolean show = !cards.isEmpty();
+        column.setVisibility(show ? View.VISIBLE : View.GONE);
+        grid.setNumColumns(show ? 5 : 6);
+        final View scroll = findViewById(R.id.orders_scroll);
+        final TextView header = findViewById(R.id.orders_header);
+        scroll.setOnFocusChangeListener((v, has) -> header.setTextColor(has ? 0xFF8AB4FF : getColor(R.color.text)));
+    }
+
+    /**
+     * v42: RIGHT on the grid's last column (or last app) moves focus to the orders column, where UP/DOWN scroll it;
+     * LEFT (or Back) returns to the grid.
+     */
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+        View column = findViewById(R.id.orders_column);
+        View scroll = findViewById(R.id.orders_scroll);
+        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && column != null && column.getVisibility() == View.VISIBLE) {
+            int k = e.getKeyCode();
+            if (k == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && grid.hasFocus() && grid.getAdapter() != null) {
+                int pos = grid.getSelectedItemPosition();
+                int cols = grid.getNumColumns();
+                if (pos >= 0 && (pos % cols == cols - 1 || pos == grid.getAdapter().getCount() - 1)) {
+                    scroll.requestFocus();
+                    return true;
+                }
+            }
+            if ((k == android.view.KeyEvent.KEYCODE_DPAD_LEFT || k == android.view.KeyEvent.KEYCODE_BACK) && scroll.hasFocus()) {
+                grid.requestFocus();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     static final int WALLPAPER_SCRIM = Looks.ALL_APPS_SCRIM;

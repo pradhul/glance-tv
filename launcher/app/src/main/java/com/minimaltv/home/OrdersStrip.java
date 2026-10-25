@@ -17,7 +17,7 @@ import android.widget.TextView;
 import java.util.List;
 
 /**
- * v40: the orders strip at the bottom of All apps. One non-focusable card per order: product thumbnail
+ * v40: the orders cards in All apps (v42: a vertical, scrollable column on the right). One non-focusable card per order: product thumbnail
  * (async, rounded, box icon fallback), bold item name, store + date, a 4-step progress bar and a store badge.
  */
 final class OrdersStrip {
@@ -38,17 +38,9 @@ final class OrdersStrip {
         strip.setVisibility(View.VISIBLE);
         Context c = strip.getContext();
         for (int i = 0; i < orders.size(); i++) {
-            View card = card(c, orders.get(i));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(c, 98), 1f);
-            if (i > 0) lp.setMarginStart(dp(c, 16));
-            strip.addView(card, lp);
-        }
-        // keep the cards a fixed share of the width even with fewer orders
-        for (int i = orders.size(); i < 3; i++) {
-            View pad = new View(c);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 1, 1f);
-            lp.setMarginStart(dp(c, 16));
-            strip.addView(pad, lp);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            if (i > 0) lp.topMargin = dp(c, 8);
+            strip.addView(card(c, orders.get(i)), lp);
         }
     }
 
@@ -64,8 +56,8 @@ final class OrdersStrip {
 
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(c, 10), dp(c, 10), dp(c, 12), dp(c, 6));
-        frame.addView(col, new FrameLayout.LayoutParams(-1, -1));
+        col.setPadding(dp(c, 7), dp(c, 7), dp(c, 8), dp(c, 3));
+        frame.addView(col, new FrameLayout.LayoutParams(-1, -2));
 
         LinearLayout head = new LinearLayout(c);
         head.setOrientation(LinearLayout.HORIZONTAL);
@@ -80,18 +72,19 @@ final class OrdersStrip {
         tb.setCornerRadius(dp(c, 7));
         thumb.setBackground(tb);
         fallback(thumb);
-        head.addView(thumb, new LinearLayout.LayoutParams(dp(c, 36), dp(c, 36)));
+        head.addView(thumb, new LinearLayout.LayoutParams(dp(c, 34), dp(c, 34)));
         if (o.image != null) load(thumb, o.image);
 
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1f);
         tp.setMarginStart(dp(c, 8));
+        tp.setMarginEnd(dp(c, 36));
         head.addView(text, tp);
         TextView name = new TextView(c);
         name.setText(Orders.label(o));
         name.setTextColor(0xFFFFFFFF);
-        name.setTextSize(15);
+        name.setTextSize(12);
         name.setTypeface(Typeface.DEFAULT_BOLD);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -100,11 +93,11 @@ final class OrdersStrip {
         TextView sub = new TextView(c);
         sub.setText(date == null ? o.store : o.store + " · " + date);
         sub.setTextColor(0xB3FFFFFF);
-        sub.setTextSize(10);
+        sub.setTextSize(9);
         sub.setSingleLine(true);
         text.addView(sub);
 
-        col.addView(progress(c, Orders.step(o.status)), new LinearLayout.LayoutParams(-1, dp(c, 34)));
+        col.addView(progress(c, Orders.step(o.status)), new LinearLayout.LayoutParams(-1, dp(c, 28)));
 
         // store badge, top-right
         int icon = Orders.storeIcon(o.store);
@@ -119,7 +112,7 @@ final class OrdersStrip {
         } else {
             TextView tv = new TextView(c);
             tv.setText(o.store);
-            tv.setTextSize(9);
+            tv.setTextSize(8);
             tv.setTextColor(0xCCFFFFFF);
             badge = tv;
             frame.addView(tv, badgeLp(c, -2, -2));
@@ -130,8 +123,8 @@ final class OrdersStrip {
 
     private static FrameLayout.LayoutParams badgeLp(Context c, int w, int h) {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w, h, Gravity.TOP | Gravity.END);
-        lp.topMargin = dp(c, 8);
-        lp.rightMargin = dp(c, 10);
+        lp.topMargin = dp(c, 6);
+        lp.rightMargin = dp(c, 8);
         return lp;
     }
 
@@ -165,7 +158,7 @@ final class OrdersStrip {
             cell.addView(line, new LinearLayout.LayoutParams(-1, dp(c, 14)));
             TextView t = new TextView(c);
             t.setText(Orders.STEPS[i]);
-            t.setTextSize(9);
+            t.setTextSize(7);
             t.setTextColor(cur ? 0xFFFFFFFF : 0x99FFFFFF);
             if (cur) t.setTypeface(Typeface.DEFAULT_BOLD);
             cell.addView(t);

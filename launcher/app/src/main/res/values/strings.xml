@@ -52,4 +52,5 @@
     <string name="bing_failed">Couldn\'t get a new wallpaper</string>
     <string name="auto_style_on">Auto-switch daily: on</string>
     <string name="auto_style_off">Auto-switch daily: off</string>
+    <string name="orders_title">Orders</string>
 </resources>
