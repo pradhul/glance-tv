@@ -29,12 +29,19 @@ final class Orders {
         final String item;
         final String status;
         final LocalDate eta;
+        /** v40: optional product image URL (null when missing). */
+        final String image;
 
         Order(String store, String item, String status, LocalDate eta) {
+            this(store, item, status, eta, null);
+        }
+
+        Order(String store, String item, String status, LocalDate eta, String image) {
             this.store = store;
             this.item = item;
             this.status = status;
             this.eta = eta;
+            this.image = image;
         }
 
         boolean outForDelivery() {
@@ -119,7 +126,12 @@ final class Orders {
                             }
                         }
                     }
-                    list.add(new Order(store, o.isNull("item") ? "" : o.optString("item", ""), status, eta));
+                    String image = null;
+                    if (o.has("image") && !o.isNull("image")) {
+                        String raw = o.optString("image", "").trim();
+                        if (raw.startsWith("http://") || raw.startsWith("https://")) image = raw;
+                    }
+                    list.add(new Order(store, o.isNull("item") ? "" : o.optString("item", ""), status, eta, image));
                 }
             }
             return new Snapshot(updated, list);
@@ -208,6 +220,51 @@ final class Orders {
         if (h) return holiday;
         if (o) return orders;
         return null;
+    }
+
+    // ---- v40: All apps orders strip -------------------------------------------------------------
+
+    static final String[] STEPS = {"Ordered", "Shipped", "Out", "Delivered"};
+    static final int[] STEP_COLORS = {0xFF9E9E9E, 0xFF4A8CFF, 0xFFFFB300, 0xFF43C463};
+
+    /** v40: 0 ordered, 1 shipped, 2 out for delivery, 3 delivered. Unknown statuses count as ordered. */
+    static int step(String status) {
+        if (status == null) return 0;
+        switch (status.trim().toLowerCase(Locale.ROOT)) {
+            case "shipped":
+            case "in_transit":
+                return 1;
+            case "out_for_delivery":
+                return 2;
+            case "delivered":
+                return 3;
+            default:
+                return 0;
+        }
+    }
+
+    static int stepColor(int step) {
+        return STEP_COLORS[Math.max(0, Math.min(3, step))];
+    }
+
+    /** v40: the store's logo from the icon pack, or 0 when there is none (caller shows the store name instead). */
+    static int storeIcon(String store) {
+        String s = store == null ? "" : store.trim().toLowerCase(Locale.ROOT);
+        if (s.startsWith("amazon")) return R.drawable.ic_app_arc_amazon_prime_video;
+        return 0;
+    }
+
+    /** v40: {@code due Mon 26 Oct} (out for delivery) or {@code by Thu 29 Oct}; null when there is no eta. */
+    static String cardDate(Order o) {
+        if (o.eta == null) return null;
+        return (o.outForDelivery() || step(o.status) == 0 ? "due " : "by ") + ETA.format(o.eta);
+    }
+
+    /** v40: the cards for the All apps strip; empty (strip hidden) when stale or nothing to show. */
+    static List<Order> cards(Snapshot s, LocalDate today, Instant now) {
+        if (stale(s, now)) return new ArrayList<>();
+        List<Order> vis = visible(s, today);
+        return vis.size() > MAX_SHOWN ? new ArrayList<>(vis.subList(0, MAX_SHOWN)) : vis;
     }
 
     static String cached(SharedPreferences prefs) {

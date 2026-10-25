@@ -47,6 +47,7 @@ public class AllAppsActivity extends Activity {
         grid.setFocusableInTouchMode(true);
         grid.setClipChildren(true);
         loadWallpaper();
+        bindOrders();
         grid.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
@@ -108,6 +109,15 @@ public class AllAppsActivity extends Activity {
                 }
             });
         }, "all-apps-wp").start();
+    }
+
+    /** v40: orders strip from the same cached orders JSON the home screen uses (only when a URL is set). */
+    private void bindOrders() {
+        android.widget.LinearLayout strip = findViewById(R.id.orders_strip);
+        if (strip == null) return;
+        android.content.SharedPreferences p = getSharedPreferences(Looks.PREFS, MODE_PRIVATE);
+        String json = Orders.url(p.getString(Orders.KEY_URL, Orders.DEFAULT_URL)).isEmpty() ? null : Orders.cached(p);
+        OrdersStrip.bind(strip, Orders.cards(Orders.parse(json), Orders.today(), Orders.now()));
     }
 
     static final int WALLPAPER_SCRIM = Looks.ALL_APPS_SCRIM;
