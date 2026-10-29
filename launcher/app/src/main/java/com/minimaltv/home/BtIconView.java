@@ -48,7 +48,7 @@ final class BtIconView extends View {
         label = Bt.label(s);
         int res = s.kind == Bt.KIND_REMOTE ? R.drawable.ic_bt_remote : s.headphones ? R.drawable.ic_bt_headphones : R.drawable.ic_bt_speaker;
         icon = getContext().getDrawable(res).mutate();
-        setContentDescription((s.name != null ? s.name : "Bluetooth") + (s.connected ? ", connected" : ", disconnected")
+        setContentDescription((s.name != null ? s.name : s.usb ? "USB" : "Bluetooth") + (s.connected ? ", connected" : ", disconnected")
                 + (s.battery >= 0 ? ", battery " + s.battery + "%" : ""));
         requestLayout();
         invalidate();
@@ -116,7 +116,7 @@ final class BtIconView extends View {
             Paint.FontMetrics fm = text.getFontMetrics();
             float base = top + bh + d + LABEL_GAP_DP * d - fm.ascent;
             // Name in ink (dimmed when off), the % in the state colour.
-            String name = Bt.shortName(state.name);
+            String name = Bt.displayName(state);
             String pct = label.substring(Math.min(label.length(), name.length()));
             float wName = text.measureText(name), wAll = text.measureText(label);
             float x0 = cx - wAll / 2f;

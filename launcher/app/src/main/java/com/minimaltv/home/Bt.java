@@ -40,8 +40,14 @@ final class Bt {
         final boolean headphones;
         final boolean connected;
         final int battery;   // 0-100, or -1 unknown
+        final boolean usb;   // v44: a USB / 2.4GHz dongle from InputManager, not Bluetooth (no battery)
 
         State(String address, String name, int kind, boolean headphones, boolean connected, int battery) {
+            this(address, name, kind, headphones, connected, battery, false);
+        }
+
+        State(String address, String name, int kind, boolean headphones, boolean connected, int battery, boolean usb) {
+            this.usb = usb;
             this.address = address;
             this.name = name;
             this.kind = kind;
@@ -85,8 +91,14 @@ final class Bt {
         return first.length() > 8 ? first.substring(0, 8) : first;
     }
 
+    /** v44: the name part of the label: USB dongles keep their cleaned full name, Bluetooth the short brand. */
+    static String displayName(State s) {
+        return s.usb ? (s.name != null ? s.name : "USB") : shortName(s.name);
+    }
+
     /** "Mi 61%" when connected with a known battery, else just the short name. */
     static String label(State s) {
+        if (s.usb) return displayName(s);
         String b = s.connected && s.battery >= 0 ? " " + s.battery + "%" : "";
         return shortName(s.name) + b;
     }
@@ -100,6 +112,7 @@ final class Bt {
     private final Context context;
     private final Runnable onChange;
     private boolean registered;
+    private final UsbInput usb;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
@@ -115,6 +128,7 @@ final class Bt {
     Bt(Context context, Runnable onChange) {
         this.context = context;
         this.onChange = onChange;
+        this.usb = new UsbInput(context, onChange);
     }
 
     /** Applies one broadcast; static and package-private so tests can drive it without a radio. */
@@ -149,6 +163,7 @@ final class Bt {
     }
 
     void start() {
+        usb.start();
         if (registered || !permitted()) return;
         IntentFilter f = new IntentFilter();
         f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
@@ -164,6 +179,7 @@ final class Bt {
     }
 
     void stop() {
+        usb.stop();
         if (!registered) return;
         registered = false;
         try {
@@ -191,6 +207,14 @@ final class Bt {
 
     /** One device per kind, connected first: what the row shows. Never-connected-this-session devices are left out. */
     List<State> states() {
+        List<State> out = btStates();
+        List<String> names = new ArrayList<>();
+        for (State s : out) names.add(s.name);
+        out.addAll(UsbInput.states(usb.devices(), names));
+        return out;
+    }
+
+    private List<State> btStates() {
         List<State> out = new ArrayList<>();
         if (!permitted()) return out;
         Set<BluetoothDevice> bonded;
